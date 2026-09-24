@@ -1,37 +1,43 @@
 import { useState, useEffect } from 'react';
 import { X } from 'lucide-react';
-import type { Task, TaskCategory, TaskPriority } from '@/types';
-import { CATEGORY_LABELS, PRIORITY_LABELS } from '@/types';
-import { projects } from '@/mockData';
+import type { Task, TaskPriority } from '@/types';
+import { PRIORITY_LABELS } from '@/types';
+import { useTasks } from '@/context/TaskContext';
 
 interface OrganizeSheetProps {
   task: Task | null;
   onClose: () => void;
   onOrganize: (id: string, data: {
-    category: TaskCategory;
+    categoryId: string | null;
     priority: TaskPriority;
     projectId: string | null;
     nextAction: string;
   }) => void;
 }
 
-const categories: TaskCategory[] = ['MONEY', 'BUILD', 'LEARN', 'ADMIN', 'LATER'];
 const priorities: TaskPriority[] = ['BIG_ROCK', 'SUPPORT', 'ADMIN', 'NONE'];
 
 export default function OrganizeSheet({ task, onClose, onOrganize }: OrganizeSheetProps) {
-  const [category, setCategory] = useState<TaskCategory>('BUILD');
+  const { categories, projects } = useTasks();
+  const activeCategories = categories.filter((category) => category.status === 'ACTIVE');
+  const [categoryId, setCategoryId] = useState<string | null>(null);
   const [priority, setPriority] = useState<TaskPriority>('SUPPORT');
   const [projectId, setProjectId] = useState<string | null>(null);
   const [nextAction, setNextAction] = useState('');
 
   useEffect(() => {
     if (task) {
-      setCategory(task.category ?? 'BUILD');
+      const categoryExists = categories.some((category) => category.id === task.categoryId);
+      setCategoryId(
+        categoryExists
+          ? task.categoryId
+          : activeCategories[0]?.id ?? null,
+      );
       setPriority(task.priority === 'NONE' ? 'SUPPORT' : task.priority);
       setProjectId(task.projectId);
       setNextAction(task.nextAction);
     }
-  }, [task]);
+  }, [task, categories, activeCategories]);
 
   useEffect(() => {
     if (task) {
@@ -44,11 +50,18 @@ export default function OrganizeSheet({ task, onClose, onOrganize }: OrganizeShe
 
   if (!task) return null;
 
-  const isLater = category === 'LATER';
+  const selectedCategory = categories.find((category) => category.id === categoryId);
+  const isLater = selectedCategory?.systemKey === 'LATER';
+  const visibleCategories = categories.filter(
+    (category) => category.status === 'ACTIVE' || category.id === categoryId,
+  );
+  const visibleProjects = projects.filter(
+    (project) => project.status === 'ACTIVE' || project.id === projectId,
+  );
 
   const handleSave = () => {
     onOrganize(task.id, {
-      category,
+      categoryId,
       priority: isLater ? 'NONE' : priority,
       projectId,
       nextAction: isLater ? '' : nextAction.trim(),
@@ -76,17 +89,17 @@ export default function OrganizeSheet({ task, onClose, onOrganize }: OrganizeShe
             Category
           </p>
           <div className="flex flex-wrap gap-2">
-            {categories.map((cat) => (
+            {visibleCategories.map((cat) => (
               <button
-                key={cat}
-                onClick={() => setCategory(cat)}
+                key={cat.id}
+                onClick={() => setCategoryId(cat.id)}
                 className={`px-3.5 py-2 rounded-xl text-sm font-medium transition-colors ${
-                  category === cat
+                  categoryId === cat.id
                     ? 'bg-accent-500 text-ink-950'
                     : 'bg-ink-800 text-ink-300 border border-ink-700 hover:border-ink-600'
                 }`}
               >
-                {CATEGORY_LABELS[cat]}
+                {cat.name}
               </button>
             ))}
           </div>
@@ -132,7 +145,7 @@ export default function OrganizeSheet({ task, onClose, onOrganize }: OrganizeShe
             >
               None
             </button>
-            {projects.map((p) => (
+            {visibleProjects.map((p) => (
               <button
                 key={p.id}
                 onClick={() => setProjectId(p.id)}

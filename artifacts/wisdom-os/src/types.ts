@@ -1,4 +1,24 @@
-export type TaskCategory = 'MONEY' | 'BUILD' | 'LEARN' | 'ADMIN' | 'LATER';
+export type LegacyTaskCategory = 'MONEY' | 'BUILD' | 'LEARN' | 'ADMIN' | 'LATER';
+export type CategorySystemKey = LegacyTaskCategory;
+
+export type RecordStatus = 'ACTIVE' | 'ARCHIVED';
+
+export interface Category {
+  id: string;
+  name: string;
+  description?: string;
+  status: RecordStatus;
+  createdAt: string;
+  updatedAt: string;
+  systemKey?: CategorySystemKey;
+}
+
+export interface Workspace {
+  id: string;
+  name: string;
+  createdAt: string;
+  updatedAt: string;
+}
 
 export type TaskStatus = 'INBOX' | 'ACTIVE' | 'COMPLETED';
 
@@ -7,7 +27,9 @@ export type TaskPriority = 'BIG_ROCK' | 'SUPPORT' | 'ADMIN' | 'NONE';
 export interface Task {
   id: string;
   title: string;
-  category: TaskCategory | null;
+  categoryId: string | null;
+  /** Kept only so legacy localStorage records can be migrated safely. */
+  category?: LegacyTaskCategory | null;
   status: TaskStatus;
   priority: TaskPriority;
   nextAction: string;
@@ -19,6 +41,9 @@ export interface Project {
   id: string;
   name: string;
   description: string;
+  status: RecordStatus;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface DailyPlan {
@@ -60,12 +85,20 @@ export interface ActiveFocusSession {
 
 export type BrainDumpFilter = 'ALL' | 'INBOX' | 'ORGANIZED';
 
-export const CATEGORY_LABELS: Record<TaskCategory, string> = {
-  MONEY: 'Money',
-  BUILD: 'Build',
-  LEARN: 'Learn',
-  ADMIN: 'Admin',
-  LATER: 'Later',
+export const STARTER_CATEGORIES: Category[] = [
+  { id: 'category-money', name: 'Money', systemKey: 'MONEY', status: 'ACTIVE', createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z' },
+  { id: 'category-build', name: 'Build', systemKey: 'BUILD', status: 'ACTIVE', createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z' },
+  { id: 'category-learn', name: 'Learn', systemKey: 'LEARN', status: 'ACTIVE', createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z' },
+  { id: 'category-admin', name: 'Admin', systemKey: 'ADMIN', status: 'ACTIVE', createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z' },
+  { id: 'category-later', name: 'Later', systemKey: 'LATER', status: 'ACTIVE', createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z' },
+];
+
+export const LEGACY_CATEGORY_IDS: Record<LegacyTaskCategory, string> = {
+  MONEY: 'category-money',
+  BUILD: 'category-build',
+  LEARN: 'category-learn',
+  ADMIN: 'category-admin',
+  LATER: 'category-later',
 };
 
 export const PRIORITY_LABELS: Record<TaskPriority, string> = {

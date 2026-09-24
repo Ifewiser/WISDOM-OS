@@ -1,11 +1,39 @@
-import { createContext, useContext, useState, useCallback, useEffect, type ReactNode } from 'react';
-import type { Task, TaskCategory, TaskPriority, DailyPlan, FocusSession, ActiveFocusSession } from '@/types';
-import { getTodayDate } from '@/types';
-import { initialTasks } from '@/mockData';
-import { loadTasks, saveTasks, loadDailyPlans, saveDailyPlans, loadFocusSessions, saveFocusSessions, loadActiveFocusSession, saveActiveFocusSession } from '@/storage';
+import {
+  createContext,
+  useContext,
+  useState,
+  useCallback,
+  useEffect,
+  type ReactNode,
+} from 'react';
+import type {
+  Category,
+  Task,
+  TaskPriority,
+  DailyPlan,
+  FocusSession,
+  Project,
+  Workspace,
+} from '@/types';
+import { getTodayDate, STARTER_CATEGORIES } from '@/types';
+import {
+  loadTasks,
+  saveTasks,
+  loadProjects,
+  saveProjects,
+  loadCategories,
+  saveCategories,
+  loadWorkspace,
+  saveWorkspace,
+  loadDailyPlans,
+  saveDailyPlans,
+  loadFocusSessions,
+  saveFocusSessions,
+  resetWorkspaceData,
+} from '@/storage';
 
 interface OrganizeData {
-  category: TaskCategory;
+  categoryId: string | null;
   priority: TaskPriority;
   projectId: string | null;
   nextAction: string;
@@ -19,6 +47,9 @@ interface PlanData {
 
 interface TaskContextValue {
   tasks: Task[];
+  projects: Project[];
+  categories: Category[];
+  workspace: Workspace;
   dailyPlans: DailyPlan[];
   todayPlan: DailyPlan | null;
   focusSessions: FocusSession[];
@@ -29,6 +60,14 @@ interface TaskContextValue {
   savePlan: (date: string, data: PlanData) => void;
   getDailyPlan: (date: string) => DailyPlan | null;
   addFocusSession: (session: FocusSession) => void;
+  addProject: (name: string, description: string) => void;
+  updateProject: (id: string, name: string, description: string) => void;
+  archiveProject: (id: string) => void;
+  addCategory: (name: string) => void;
+  updateCategory: (id: string, name: string) => void;
+  archiveCategory: (id: string) => void;
+  updateWorkspaceName: (name: string) => void;
+  resetWorkspace: () => void;
   todayFocusMinutes: number;
   todayFocusSessionCount: number;
 }
@@ -37,9 +76,9 @@ const TaskContext = createContext<TaskContextValue | null>(null);
 
 let idCounter = 1000;
 
-function generateId(): string {
+function generateId(prefix: string): string {
   idCounter += 1;
-  return `task-${idCounter}`;
+  return `${prefix}-${Date.now()}-${idCounter}`;
 }
 
 function createEmptyPlan(date: string): DailyPlan {
@@ -56,30 +95,36 @@ function createEmptyPlan(date: string): DailyPlan {
 }
 
 export function TaskProvider({ children }: { children: ReactNode }) {
-  const [tasks, setTasks] = useState<Task[]>(() => loadTasks() ?? initialTasks);
-  const [dailyPlans, setDailyPlans] = useState<DailyPlan[]>(() => loadDailyPlans() ?? []);
-  const [focusSessions, setFocusSessions] = useState<FocusSession[]>(() => loadFocusSessions() ?? []);
+  const [tasks, setTasks] = useState<Task[]>(() => loadTasks() ?? []);
+  const [projects, setProjects] = useState<Project[]>(() => loadProjects() ?? []);
+  const [categories, setCategories] = useState<Category[]>(
+    () => loadCategories() ?? STARTER_CATEGORIES.map((category) => ({ ...category })),
+  );
+  const [workspace, setWorkspace] = useState<Workspace>(() => loadWorkspace());
+  const [dailyPlans, setDailyPlans] = useState<DailyPlan[]>(
+    () => loadDailyPlans() ?? [],
+  );
+  const [focusSessions, setFocusSessions] = useState<FocusSession[]>(
+    () => loadFocusSessions() ?? [],
+  );
 
-  useEffect(() => {
-    saveTasks(tasks);
-  }, [tasks]);
-
-  useEffect(() => {
-    saveDailyPlans(dailyPlans);
-  }, [dailyPlans]);
-
-  useEffect(() => {
-    saveFocusSessions(focusSessions);
-  }, [focusSessions]);
+  useEffect(() => saveTasks(tasks), [tasks]);
+  useEffect(() => saveProjects(projects), [projects]);
+  useEffect(() => saveCategories(categories), [categories]);
+  useEffect(() => saveWorkspace(workspace), [workspace]);
+  useEffect(() => saveDailyPlans(dailyPlans), [dailyPlans]);
+  useEffect(() => saveFocusSessions(focusSessions), [focusSessions]);
 
   const today = getTodayDate();
   const todayPlan = dailyPlans.find((p) => p.date === today) ?? null;
 
   const addTask = useCallback((title: string) => {
+    const trimmedTitle = title.trim();
+    if (!trimmedTitle) return;
     const newTask: Task = {
-      id: generateId(),
-      title: title.trim(),
-      category: null,
+      id: generateId('task'),
+      title: trimmedTitle,
+      categoryId: null,
       status: 'INBOX',
       priority: 'NONE',
       nextAction: '',
@@ -91,43 +136,40 @@ export function TaskProvider({ children }: { children: ReactNode }) {
 
   const toggleTask = useCallback((id: string) => {
     setTasks((prev) =>
-      prev.map((t) =>
-        t.id === id
-          ? { ...t, status: t.status === 'COMPLETED' ? 'ACTIVE' : 'COMPLETED' }
-          : t,
+      prev.map((task) =>
+        task.id === id
+          ? {
+              ...task,
+              status: task.status === 'COMPLETED' ? 'ACTIVE' : 'COMPLETED',
+            }
+          : task,
       ),
     );
   }, []);
 
   const organizeTask = useCallback((id: string, data: OrganizeData) => {
     setTasks((prev) =>
-      prev.map((t) =>
-        t.id === id
+      prev.map((task) =>
+        task.id === id
           ? {
-              ...t,
-              category: data.category,
+              ...task,
+              categoryId: data.categoryId,
+              category: undefined,
               priority: data.priority,
               projectId: data.projectId,
               nextAction: data.nextAction,
               status: 'ACTIVE',
             }
-          : t,
+          : task,
       ),
     );
   }, []);
 
   const updateNextAction = useCallback((id: string, nextAction: string) => {
     setTasks((prev) =>
-      prev.map((t) => (t.id === id ? { ...t, nextAction } : t)),
+      prev.map((task) => (task.id === id ? { ...task, nextAction } : task)),
     );
   }, []);
-
-  const getDailyPlan = useCallback(
-    (date: string): DailyPlan | null => {
-      return dailyPlans.find((p) => p.date === date) ?? null;
-    },
-    [dailyPlans],
-  );
 
   const savePlan = useCallback(
     (date: string, data: PlanData) => {
@@ -147,65 +189,65 @@ export function TaskProvider({ children }: { children: ReactNode }) {
           return prev.map((p) => (p.date === date ? updated : p));
         }
 
-        const newPlan: DailyPlan = {
-          ...createEmptyPlan(date),
-          bigRockTaskId: data.bigRockTaskId,
-          supportTaskIds: data.supportTaskIds,
-          adminTaskIds: data.adminTaskIds,
-          planningCompleted: true,
-          updatedAt: now,
-        };
-        return [...prev, newPlan];
+        return [
+          ...prev,
+          {
+            ...createEmptyPlan(date),
+            bigRockTaskId: data.bigRockTaskId,
+            supportTaskIds: data.supportTaskIds,
+            adminTaskIds: data.adminTaskIds,
+            planningCompleted: true,
+            updatedAt: now,
+          },
+        ];
       });
 
-      // Update task priorities to match the plan
       setTasks((prev) => {
-        const newPlanTaskIds = new Set([
-          data.bigRockTaskId,
-          ...data.supportTaskIds,
-          ...data.adminTaskIds,
-        ].filter(Boolean) as string[]);
-
-        // All task IDs that were in the old plan but are NOT in the new plan
-        const removedIds = new Set(
+        const newPlanTaskIds = new Set(
           [
-            existing?.bigRockTaskId,
-            ...(existing?.supportTaskIds ?? []),
-            ...(existing?.adminTaskIds ?? []),
-          ]
-            .filter(Boolean)
-            .filter((id): id is string => !newPlanTaskIds.has(id as string)),
+            data.bigRockTaskId,
+            ...data.supportTaskIds,
+            ...data.adminTaskIds,
+          ].filter(Boolean) as string[],
+        );
+        const oldPlanIds = [
+          existing?.bigRockTaskId,
+          ...(existing?.supportTaskIds ?? []),
+          ...(existing?.adminTaskIds ?? []),
+        ].filter(Boolean) as string[];
+        const removedIds = new Set(
+          oldPlanIds.filter((id) => !newPlanTaskIds.has(id)),
         );
 
-        let updated = prev.map((t) => {
-          if (removedIds.has(t.id)) {
-            return { ...t, priority: 'NONE' as TaskPriority };
-          }
-          return t;
-        });
+        let updated = prev.map((task) =>
+          removedIds.has(task.id)
+            ? { ...task, priority: 'NONE' as TaskPriority }
+            : task,
+        );
 
-        // Clear BIG_ROCK from any task not in the new plan
         if (data.bigRockTaskId) {
-          updated = updated.map((t) =>
-            t.id === data.bigRockTaskId
-              ? { ...t, priority: 'BIG_ROCK' as TaskPriority }
-              : t.priority === 'BIG_ROCK'
-                ? { ...t, priority: 'SUPPORT' as TaskPriority }
-                : t,
+          updated = updated.map((task) =>
+            task.id === data.bigRockTaskId
+              ? { ...task, priority: 'BIG_ROCK' as TaskPriority }
+              : task.priority === 'BIG_ROCK'
+                ? { ...task, priority: 'SUPPORT' as TaskPriority }
+                : task,
           );
         }
 
-        // Assign Support
-        data.supportTaskIds.forEach((sid) => {
-          updated = updated.map((t) =>
-            t.id === sid ? { ...t, priority: 'SUPPORT' as TaskPriority } : t,
+        data.supportTaskIds.forEach((id) => {
+          updated = updated.map((task) =>
+            task.id === id
+              ? { ...task, priority: 'SUPPORT' as TaskPriority }
+              : task,
           );
         });
 
-        // Assign Admin
-        data.adminTaskIds.forEach((aid) => {
-          updated = updated.map((t) =>
-            t.id === aid ? { ...t, priority: 'ADMIN' as TaskPriority } : t,
+        data.adminTaskIds.forEach((id) => {
+          updated = updated.map((task) =>
+            task.id === id
+              ? { ...task, priority: 'ADMIN' as TaskPriority }
+              : task,
           );
         });
 
@@ -215,18 +257,142 @@ export function TaskProvider({ children }: { children: ReactNode }) {
     [dailyPlans],
   );
 
+  const getDailyPlan = useCallback(
+    (date: string): DailyPlan | null =>
+      dailyPlans.find((plan) => plan.date === date) ?? null,
+    [dailyPlans],
+  );
+
   const addFocusSession = useCallback((session: FocusSession) => {
     setFocusSessions((prev) => [...prev, session]);
   }, []);
 
-  const todaySessions = focusSessions.filter((s) => s.startedAt.startsWith(today));
-  const todayFocusMinutes = todaySessions.reduce((sum, s) => sum + Math.round(s.duration / 60), 0);
-  const todayFocusSessionCount = todaySessions.length;
+  const addProject = useCallback((name: string, description: string) => {
+    const trimmedName = name.trim();
+    if (!trimmedName) return;
+    const now = new Date().toISOString();
+    setProjects((prev) => [
+      ...prev,
+      {
+        id: generateId('project'),
+        name: trimmedName,
+        description: description.trim(),
+        status: 'ACTIVE',
+        createdAt: now,
+        updatedAt: now,
+      },
+    ]);
+  }, []);
+
+  const updateProject = useCallback(
+    (id: string, name: string, description: string) => {
+      const trimmedName = name.trim();
+      if (!trimmedName) return;
+      setProjects((prev) =>
+        prev.map((project) =>
+          project.id === id
+            ? {
+                ...project,
+                name: trimmedName,
+                description: description.trim(),
+                updatedAt: new Date().toISOString(),
+              }
+            : project,
+        ),
+      );
+    },
+    [],
+  );
+
+  const archiveProject = useCallback((id: string) => {
+    setProjects((prev) =>
+      prev.map((project) =>
+        project.id === id
+          ? { ...project, status: 'ARCHIVED', updatedAt: new Date().toISOString() }
+          : project,
+      ),
+    );
+  }, []);
+
+  const addCategory = useCallback((name: string) => {
+    const trimmedName = name.trim();
+    if (!trimmedName) return;
+    const now = new Date().toISOString();
+    setCategories((prev) => [
+      ...prev,
+      {
+        id: generateId('category'),
+        name: trimmedName,
+        status: 'ACTIVE',
+        createdAt: now,
+        updatedAt: now,
+      },
+    ]);
+  }, []);
+
+  const updateCategory = useCallback((id: string, name: string) => {
+    const trimmedName = name.trim();
+    if (!trimmedName) return;
+    setCategories((prev) =>
+      prev.map((category) =>
+        category.id === id
+          ? { ...category, name: trimmedName, updatedAt: new Date().toISOString() }
+          : category,
+      ),
+    );
+  }, []);
+
+  const archiveCategory = useCallback((id: string) => {
+    setCategories((prev) =>
+      prev.map((category) =>
+        category.id === id
+          ? { ...category, status: 'ARCHIVED', updatedAt: new Date().toISOString() }
+          : category,
+      ),
+    );
+  }, []);
+
+  const updateWorkspaceName = useCallback((name: string) => {
+    const trimmedName = name.trim();
+    if (!trimmedName) return;
+    setWorkspace((prev) => ({
+      ...prev,
+      name: trimmedName,
+      updatedAt: new Date().toISOString(),
+    }));
+  }, []);
+
+  const resetWorkspace = useCallback(() => {
+    resetWorkspaceData();
+    const now = new Date().toISOString();
+    setTasks([]);
+    setProjects([]);
+    setCategories(STARTER_CATEGORIES.map((category) => ({ ...category })));
+    setDailyPlans([]);
+    setFocusSessions([]);
+    setWorkspace({
+      id: workspace.id,
+      name: 'My Workspace',
+      createdAt: now,
+      updatedAt: now,
+    });
+  }, [workspace.id]);
+
+  const todaySessions = focusSessions.filter((session) =>
+    session.startedAt.startsWith(today),
+  );
+  const todayFocusMinutes = todaySessions.reduce(
+    (sum, session) => sum + Math.round(session.duration / 60),
+    0,
+  );
 
   return (
     <TaskContext.Provider
       value={{
         tasks,
+        projects,
+        categories,
+        workspace,
         dailyPlans,
         todayPlan,
         focusSessions,
@@ -237,8 +403,16 @@ export function TaskProvider({ children }: { children: ReactNode }) {
         savePlan,
         getDailyPlan,
         addFocusSession,
+        addProject,
+        updateProject,
+        archiveProject,
+        addCategory,
+        updateCategory,
+        archiveCategory,
+        updateWorkspaceName,
+        resetWorkspace,
         todayFocusMinutes,
-        todayFocusSessionCount,
+        todayFocusSessionCount: todaySessions.length,
       }}
     >
       {children}
@@ -247,7 +421,7 @@ export function TaskProvider({ children }: { children: ReactNode }) {
 }
 
 export function useTasks(): TaskContextValue {
-  const ctx = useContext(TaskContext);
-  if (!ctx) throw new Error('useTasks must be used within TaskProvider');
-  return ctx;
+  const context = useContext(TaskContext);
+  if (!context) throw new Error('useTasks must be used within TaskProvider');
+  return context;
 }

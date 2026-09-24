@@ -1,6 +1,6 @@
 import { Circle, CheckCircle2, ArrowRightCircle } from 'lucide-react';
 import type { Task } from '@/types';
-import { CATEGORY_LABELS } from '@/types';
+import { useTasks } from '@/context/TaskContext';
 
 interface BrainDumpItemProps {
   task: Task;
@@ -18,9 +18,14 @@ const categoryColors: Record<string, string> = {
 };
 
 export default function BrainDumpItem({ task, onOrganize, onToggle }: BrainDumpItemProps) {
+  const { categories } = useTasks();
   const isOrganized = task.status !== 'INBOX';
-  const badgeLabel = isOrganized && task.category ? CATEGORY_LABELS[task.category] : 'INBOX';
-  const badgeClass = isOrganized && task.category ? categoryColors[task.category] : categoryColors.INBOX;
+  const category = categories.find((item) => item.id === task.categoryId);
+  const badgeLabel = isOrganized && category ? category.name : 'INBOX';
+  const badgeClass =
+    isOrganized && category
+      ? categoryColors[category.systemKey ?? 'CUSTOM'] ?? 'text-accent-300 bg-accent-500/10'
+      : categoryColors.INBOX;
 
   return (
     <div className="bg-ink-900 border border-ink-700 rounded-2xl p-4">

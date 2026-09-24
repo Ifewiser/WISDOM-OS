@@ -12,7 +12,17 @@ interface TodayScreenProps {
 }
 
 export default function TodayScreen({ onNavigate, onStartFocus }: TodayScreenProps) {
-  const { tasks, todayPlan, toggleTask, savePlan, updateNextAction, todayFocusMinutes, todayFocusSessionCount } = useTasks();
+  const {
+    tasks,
+    projects,
+    categories,
+    todayPlan,
+    toggleTask,
+    savePlan,
+    updateNextAction,
+    todayFocusMinutes,
+    todayFocusSessionCount,
+  } = useTasks();
   const [wizardOpen, setWizardOpen] = useState(false);
   const [nextActionOpen, setNextActionOpen] = useState(false);
   const [justPlanned, setJustPlanned] = useState(false);
@@ -251,6 +261,8 @@ export default function TodayScreen({ onNavigate, onStartFocus }: TodayScreenPro
         open={wizardOpen}
         onClose={() => setWizardOpen(false)}
         tasks={tasks}
+        projects={projects}
+        categories={categories}
         existingPlan={plan}
         onConfirm={handleConfirmPlan}
         onGoToBrainDump={() => {

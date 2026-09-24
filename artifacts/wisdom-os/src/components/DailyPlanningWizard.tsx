@@ -1,12 +1,13 @@
 import { useState, useEffect } from 'react';
 import { X, Check, ChevronLeft, AlertTriangle } from 'lucide-react';
-import type { Task, DailyPlan } from '@/types';
-import { projects } from '@/mockData';
+import type { Category, Task, DailyPlan, Project } from '@/types';
 
 interface DailyPlanningWizardProps {
   open: boolean;
   onClose: () => void;
   tasks: Task[];
+  projects: Project[];
+  categories: Category[];
   existingPlan: DailyPlan | null;
   onConfirm: (data: {
     bigRockTaskId: string | null;
@@ -18,19 +19,21 @@ interface DailyPlanningWizardProps {
 
 type Step = 'big-rock' | 'big-rock-confirm' | 'support' | 'admin' | 'summary';
 
-function projectName(projectId: string | null): string {
+function projectName(projectId: string | null, projects: Project[]): string {
   if (!projectId) return 'No project';
   return projects.find((p) => p.id === projectId)?.name ?? 'No project';
 }
 
 function TaskSelectCard({
   task,
+  projects,
   selected,
   onClick,
   showNextAction = true,
   showProject = true,
 }: {
   task: Task;
+  projects: Project[];
   selected: boolean;
   onClick: () => void;
   showNextAction?: boolean;
@@ -56,7 +59,7 @@ function TaskSelectCard({
         <div className="flex-1 min-w-0">
           <p className="text-sm font-medium leading-relaxed text-ink-100">{task.title}</p>
           {showProject && (
-            <p className="text-xs text-ink-500 mt-1">{projectName(task.projectId)}</p>
+            <p className="text-xs text-ink-500 mt-1">{projectName(task.projectId, projects)}</p>
           )}
           {showNextAction && task.nextAction && (
             <p className="text-xs text-accent-300 mt-1.5 leading-relaxed">{task.nextAction}</p>
@@ -74,6 +77,8 @@ export default function DailyPlanningWizard({
   open,
   onClose,
   tasks,
+  projects,
+  categories,
   existingPlan,
   onConfirm,
   onGoToBrainDump,
@@ -106,12 +111,17 @@ export default function DailyPlanningWizard({
   if (!open) return null;
 
   const eligibleBigRock = tasks.filter(
-    (t) => t.status !== 'COMPLETED' && t.status !== 'INBOX' && t.category !== 'LATER',
+    (t) =>
+      t.status !== 'COMPLETED' &&
+      t.status !== 'INBOX' &&
+      categories.find((category) => category.id === t.categoryId)?.systemKey !== 'LATER',
   );
 
   const eligibleSupport = eligibleBigRock.filter((t) => t.id !== bigRockId);
   const eligibleAdmin = tasks.filter(
-    (t) => t.status === 'ACTIVE' && t.category === 'ADMIN',
+    (t) =>
+      t.status === 'ACTIVE' &&
+      categories.find((category) => category.id === t.categoryId)?.systemKey === 'ADMIN',
   );
 
   const bigRockTask = tasks.find((t) => t.id === bigRockId) ?? null;
@@ -206,6 +216,7 @@ export default function DailyPlanningWizard({
                 <TaskSelectCard
                   key={task.id}
                   task={task}
+                  projects={projects}
                   selected={bigRockId === task.id}
                   onClick={() => setBigRockId(task.id)}
                 />
@@ -290,6 +301,7 @@ export default function DailyPlanningWizard({
                 <TaskSelectCard
                   key={task.id}
                   task={task}
+                  projects={projects}
                   selected={supportIds.includes(task.id)}
                   onClick={() => toggleSupport(task.id)}
                 />
@@ -321,6 +333,7 @@ export default function DailyPlanningWizard({
                 <TaskSelectCard
                   key={task.id}
                   task={task}
+                  projects={projects}
                   selected={adminIds.includes(task.id)}
                   onClick={() => toggleAdmin(task.id)}
                   showNextAction={false}
