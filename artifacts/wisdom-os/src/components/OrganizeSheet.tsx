@@ -31,13 +31,13 @@ export default function OrganizeSheet({ task, onClose, onOrganize }: OrganizeShe
       setCategoryId(
         categoryExists
           ? task.categoryId
-          : activeCategories[0]?.id ?? null,
+          : categories.find((category) => category.status === 'ACTIVE')?.id ?? null,
       );
       setPriority(task.priority === 'NONE' ? 'SUPPORT' : task.priority);
       setProjectId(task.projectId);
       setNextAction(task.nextAction);
     }
-  }, [task, categories, activeCategories]);
+  }, [task, categories]);
 
   useEffect(() => {
     if (task) {
