@@ -1,0 +1,217 @@
+PHASE 6B.5: DATABASE FOUNDATION VERIFICATION
+
+This is a READ-ONLY verification pass.
+
+Phase 6B has been implemented.
+
+DO NOT:
+
+* modify any source files
+* modify schema
+* generate new migrations
+* install packages
+* create a Supabase project
+* implement authentication
+* create RLS policies
+* modify localStorage
+* modify UI
+* modify TaskContext
+
+Inspect the ACTUAL implementation, especially:
+
+* lib/db/src/schema/index.ts
+* lib/db/drizzle.config.ts
+* lib/db/package.json
+* every generated SQL migration in lib/db/drizzle/
+* migration metadata/snapshots
+
+Do not rely only on the Phase 6B summary.
+
+## Verify 1: Supabase auth.users references
+
+Inspect every foreign key referencing auth.users.
+
+Confirm:
+
+* They reference exactly auth.users(id)
+* auth.users is never recreated
+* no migration attempts to CREATE TABLE auth.users
+* no application migration attempts to modify Supabase's managed auth schema
+
+Report every auth.users foreign key found.
+
+## Verify 2: Composite workspace foreign keys
+
+Inspect the actual SQL/schema definitions.
+
+Verify:
+
+tasks:
+(workspace_id, category_id)
+→ categories(workspace_id, id)
+
+tasks:
+(workspace_id, project_id)
+→ projects(workspace_id, id)
+
+daily_plan_items:
+(workspace_id, daily_plan_id)
+→ daily_plans(workspace_id, id)
+
+daily_plan_items:
+(workspace_id, task_id)
+→ tasks(workspace_id, id)
+
+focus_sessions:
+(workspace_id, task_id)
+→ tasks(workspace_id, id)
+
+Confirm that the required unique constraints exist on referenced columns so PostgreSQL accepts these composite foreign keys.
+
+Flag any relationship that is only application-level rather than database-enforced.
+
+## Verify 3: Delete behavior
+
+Inspect ON DELETE behavior for every foreign key.
+
+Confirm:
+
+* deleting a workspace can cascade its owned data
+* deleting a workspace member does NOT delete the workspace
+* deleting a category does not unexpectedly delete tasks
+* deleting a project does not unexpectedly delete tasks
+* deleting a task does not silently destroy historical plan/session data unless explicitly intended
+* daily_plan_items are removed when their daily_plan is removed
+
+Report any potentially dangerous cascade.
+
+## Verify 4: Constraints
+
+Inspect actual CHECK/UNIQUE constraints.
+
+Verify:
+
+Categories:
+
+* valid status
+* valid system_key
+* case-insensitive name uniqueness per workspace
+* unique non-null system_key per workspace
+* workspace-scoped legacy_id uniqueness
+
+Projects:
+
+* valid status
+* case-insensitive name uniqueness per workspace
+* workspace-scoped legacy_id uniqueness
+
+Tasks:
+
+* valid status
+* valid priority
+* title not empty if implemented
+* valid category/project relationships
+
+Daily plans:
+
+* unique workspace/user/date
+
+Daily plan items:
+
+* valid role
+* duplicate task membership prevented
+* valid workspace relationships
+
+Focus sessions:
+
+* valid status
+* positive duration
+* valid ended_at relationship
+* valid paused_remaining_seconds
+* one RUNNING/PAUSED session per user/workspace
+
+Report any constraint that is missing or weaker than intended.
+
+## Verify 5: updated_at
+
+Inspect the actual trigger/function.
+
+Confirm:
+
+* public.set_updated_at() exists
+* it sets NEW.updated_at appropriately
+* all intended editable tables have the trigger
+* there are no broken trigger references
+
+List the tables using the trigger.
+
+## Verify 6: RLS
+
+Confirm RLS is enabled on all nine application tables:
+
+profiles
+workspaces
+workspace_members
+categories
+projects
+tasks
+daily_plans
+daily_plan_items
+focus_sessions
+
+Confirm there are currently NO permissive/public policies.
+
+This is expected because Phase 6C will implement authenticated policies.
+
+Do not add policies.
+
+## Verify 7: Drizzle migration integrity
+
+Inspect:
+
+* drizzle journal
+* snapshots
+* migration ordering
+* generated SQL
+
+Confirm:
+
+* no duplicated table creation
+* no contradictory ALTER statements
+* migrations represent the current schema
+* no accidental schema objects outside the intended Wisdom OS tables/functions/indexes/triggers
+
+## Verify 8: Existing application compatibility
+
+Do not change code.
+
+Confirm that Phase 6B did not modify:
+
+* TaskContext
+* storage.ts
+* localStorage behavior
+* UI components
+* Express health endpoint
+
+Run:
+
+* workspace typecheck
+* production build
+
+Confirm existing app still loads.
+
+## Output
+
+Return ONLY:
+
+A. PASS/FAIL for each verification area
+B. Exact problems found, if any
+C. Exact files/SQL statements responsible
+D. Required fixes, if any
+E. Whether the database foundation is safe to proceed to Phase 6C
+
+Do not fix anything automatically.
+
+If everything passes, explicitly state:
+
+"Phase 6B foundation is verified and ready for Phase 6C."
