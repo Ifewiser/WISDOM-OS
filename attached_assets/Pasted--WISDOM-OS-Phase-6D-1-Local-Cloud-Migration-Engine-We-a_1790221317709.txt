@@ -1,0 +1,611 @@
+# WISDOM OS — Phase 6D.1: Local → Cloud Migration Engine
+
+We are now implementing Phase 6D.1 of WISDOM OS.
+
+Phase 6C.5 is COMPLETE and CLOSED.
+
+Phase 6D-A Local → Cloud Migration Readiness Audit is COMPLETE.
+
+The audit concluded:
+
+**READY WITH CONDITIONS**
+
+We have now resolved the migration-policy decisions below. Treat these as the implementation contract.
+
+---
+
+# CRITICAL SCOPE BOUNDARY
+
+This phase implements the **migration engine only**.
+
+DO NOT switch the application from localStorage to cloud authority.
+
+DO NOT rewrite TaskContext to use Supabase CRUD.
+
+DO NOT remove localStorage persistence.
+
+DO NOT delete localStorage data.
+
+DO NOT change the existing Supabase database schema.
+
+DO NOT modify existing RLS policies.
+
+DO NOT modify existing authentication behavior.
+
+DO NOT modify the bootstrap RPC.
+
+DO NOT create new database tables.
+
+DO NOT create new RLS policies.
+
+DO NOT create new Supabase RPCs.
+
+DO NOT modify existing migration SQL.
+
+DO NOT reset or rebuild the database.
+
+DO NOT automatically clean up local data.
+
+DO NOT implement cloud-first TaskContext behavior.
+
+The application must continue behaving as a localStorage-authoritative application after this phase.
+
+The migration engine may WRITE MIGRATION DATA to Supabase for the authenticated user's existing workspace, but it must NOT make the application depend on those cloud rows yet.
+
+---
+
+# 1. IMPLEMENTATION CONTRACT
+
+Use the following decisions exactly.
+
+## Workspace association
+
+The current local workspace is a local storage namespace.
+
+It is NOT an authorization boundary.
+
+The authenticated cloud workspace is obtained from the existing AuthContext/bootstrap flow.
+
+The migration must:
+
+1. obtain the trusted authenticated user ID from the Supabase session
+2. obtain the existing bootstrapped cloud workspace UUID
+3. associate the current local workspace namespace with that cloud workspace
+4. never trust the local workspace ID for authorization
+
+Do NOT create a second cloud workspace for migration.
+
+Do NOT create a new workspace if the authenticated user's bootstrapped workspace already exists.
+
+---
+
+# 2. LOCAL DATA REMAINS AUTHORITATIVE
+
+The migration lifecycle is:
+
+```text
+LOCAL STORAGE
+     ↓
+RAW SNAPSHOT
+     ↓
+VALIDATION
+     ↓
+CLOUD MIGRATION
+     ↓
+VERIFICATION
+     ↓
+MIGRATION SUCCESS
+```
+
+The application must continue reading/writing localStorage throughout Phase 6D.1.
+
+The migration engine must operate from a snapshot.
+
+It must NOT mutate the application's working task/category/project/plan/focus state.
+
+It must NOT rely on TaskContext state as its source of truth.
+
+---
+
+# 3. RAW LOCALSTORAGE SNAPSHOT
+
+Create a migration-safe raw snapshot mechanism.
+
+This is important because existing storage loaders can have side effects such as:
+
+* creating a workspace ID
+* copying legacy unscoped collections
+* generating starter categories
+* normalizing legacy task categories
+* persisting loaded/default state
+
+The migration must therefore capture the raw relevant localStorage values BEFORE normal data loaders mutate them whenever possible.
+
+Capture:
+
+```text
+wisdomos:workspaceId
+
+wisdomos:workspace:<workspaceId>:workspace
+wisdomos:workspace:<workspaceId>:categories
+wisdomos:workspace:<workspaceId>:projects
+wisdomos:workspace:<workspaceId>:tasks
+wisdomos:workspace:<workspaceId>:dailyPlans
+wisdomos:workspace:<workspaceId>:focusSessions
+wisdomos:workspace:<workspaceId>:activeFocusSession
+
+wisdomos:tasks
+wisdomos:dailyPlans
+wisdomos:focusSessions
+wisdomos:activeFocusSession
+```
+
+Do not remove or alter any of these keys.
+
+The snapshot should preserve the original raw strings as well as parsed data where practical.
+
+---
+
+# 4. LEGACY LOCAL DATA HANDLING
+
+The migration must understand the existing legacy behavior.
+
+If a current scoped collection exists, prefer it as the primary source.
+
+If the current scoped collection does not exist and a supported legacy unscoped collection exists, use the legacy source according to the existing application's compatibility rules.
+
+However:
+
+**Do not silently discard conflicting scoped and legacy data.**
+
+If both exist and materially differ, produce a migration diagnostic.
+
+Do not overwrite one with the other.
+
+Do not automatically "choose the newest" unless that behavior is explicitly justified by existing application semantics.
+
+---
+
+# 5. MIGRATION TYPES
+
+Create explicit types for migration state and diagnostics.
+
+At minimum include concepts equivalent to:
+
+```text
+MigrationStatus:
+- NOT_STARTED
+- VALIDATING
+- READY
+- MIGRATING
+- VERIFYING
+- SUCCESS
+- FAILED
+
+MigrationStage:
+- SNAPSHOT
+- VALIDATION
+- WORKSPACE
+- CATEGORIES
+- PROJECTS
+- TASKS
+- DAILY_PLANS
+- DAILY_PLAN_ITEMS
+- FOCUS_SESSIONS
+- VERIFICATION
+- COMPLETE
+
+Diagnostic severity:
+- INFO
+- WARNING
+- ERROR
+```
+
+Create structured diagnostics containing, where applicable:
+
+```text
+entityType
+localId
+sourceKey
+stage
+severity
+message
+retryable
+quarantined
+```
+
+Do not expose raw passwords, access tokens, refresh tokens, service-role keys, or database credentials in diagnostics.
+
+---
+
+# 6. DURABLE MIGRATION STATE
+
+Create a durable migration state mechanism.
+
+For Phase 6D.1 this may be localStorage-based.
+
+Use a dedicated versioned key such as:
+
+```text
+wisdomos:migration:<localWorkspaceId>:v1
+```
+
+The state must contain enough information to safely resume an interrupted migration.
+
+At minimum track:
+
+```text
+schemaVersion
+localWorkspaceId
+cloudWorkspaceId
+userId
+status
+currentStage
+startedAt
+updatedAt
+completedAt
+validationSummary
+stageResults
+```
+
+Track per-stage completion where practical.
+
+The migration state must NOT be used as an authorization mechanism.
+
+Cloud authorization always comes from Supabase Auth + RLS.
+
+---
+
+# 7. SNAPSHOT IDENTITY
+
+The migration snapshot must record:
+
+```text
+localWorkspaceId
+cloudWorkspaceId
+authenticatedUserId
+workspaceTimezone
+snapshot timestamp
+```
+
+The local workspace ID is an identifier only.
+
+The cloud workspace ID and authenticated user ID are security-sensitive associations and must be obtained from trusted application state/session data.
+
+Do not allow the caller to arbitrarily provide a different user ID.
+
+---
+
+# 8. TIMEZONE POLICY
+
+The local workspace does not currently store a timezone.
+
+For migration:
+
+Use the browser's IANA timezone:
+
+```ts
+Intl.DateTimeFormat().resolvedOptions().timeZone
+```
+
+If unavailable or invalid:
+
+```text
+UTC
+```
+
+Store/use that timezone for the migration context.
+
+Do NOT convert an existing local daily-plan date through UTC.
+
+For example:
+
+```text
+2026-09-24
+```
+
+must remain:
+
+```text
+2026-09-24
+```
+
+The date is a literal local calendar date.
+
+---
+
+# 9. CATEGORY MIGRATION
+
+Migrate local categories into cloud `categories`.
+
+Map:
+
+```text
+local.id        → legacy_id
+local.name      → name
+local.description → description
+local.status    → status
+local.systemKey → system_key
+local.createdAt → created_at
+local.updatedAt → updated_at
+```
+
+Cloud UUID is generated by Supabase/Postgres.
+
+## Built-in categories
+
+The stable system keys are:
+
+```text
+MONEY
+BUILD
+LEARN
+ADMIN
+LATER
+```
+
+For system categories:
+
+Prefer matching the existing cloud category by:
+
+```text
+workspace_id + system_key
+```
+
+rather than display name.
+
+`LATER` MUST remain:
+
+```text
+system_key = LATER
+```
+
+Do not identify Later solely by its name.
+
+## Custom categories
+
+Match using:
+
+```text
+workspace_id + legacy_id
+```
+
+Do not silently collapse two distinct local categories because their names are similar.
+
+If cloud uniqueness constraints cause a conflict, produce a deterministic diagnostic.
+
+---
+
+# 10. PROJECT MIGRATION
+
+Migrate local projects into cloud `projects`.
+
+Map:
+
+```text
+local.id        → legacy_id
+local.name      → name
+local.description → description
+local.status    → status
+local.createdAt → created_at
+local.updatedAt → updated_at
+```
+
+Use:
+
+```text
+workspace_id + legacy_id
+```
+
+for idempotent matching.
+
+Do not delete cloud records.
+
+Do not silently overwrite conflicting records unless their identity is an exact legacy-ID match and the migration contract requires synchronization.
+
+If a conflict exists, report it.
+
+---
+
+# 11. TASK MIGRATION
+
+Migrate tasks only after categories and projects have been successfully resolved.
+
+Map:
+
+```text
+local.id        → legacy_id
+local.title     → title
+local.status    → status
+local.priority  → priority
+local.nextAction → next_action
+local.createdAt → created_at
+```
+
+Set:
+
+```text
+workspace_id = authenticated cloud workspace
+created_by = authenticated session.user.id
+```
+
+Resolve:
+
+```text
+local.categoryId → cloud category UUID
+local.projectId  → cloud project UUID
+```
+
+## Important
+
+The legacy `category` field is compatibility data.
+
+The cloud task should use the resolved `category_id`.
+
+Do not invent a category if `categoryId` is missing or invalid.
+
+If `categoryId === null`, preserve it as NULL where the cloud schema permits.
+
+If a non-null category ID cannot be resolved:
+
+* do not invent a relationship
+* do not guess based on category name
+* produce an ERROR diagnostic
+* quarantine/skip that task according to the migration validation contract
+
+Likewise for project relationships.
+
+---
+
+# 12. TASK TIMESTAMP POLICY
+
+The local task model has:
+
+```text
+createdAt
+```
+
+but does not have:
+
+```text
+updatedAt
+completedAt
+```
+
+Do not invent historical timestamps.
+
+For cloud fields that require values:
+
+* use the local `createdAt` where appropriate
+* use the migration timestamp only if the cloud schema requires a value that has no historical equivalent and the schema/application semantics explicitly allow it
+* otherwise preserve NULL/default behavior
+
+Do not claim a task was completed at migration time.
+
+---
+
+# 13. DAILY PLAN MIGRATION
+
+A local DailyPlan has no ID.
+
+Each valid local plan becomes:
+
+```text
+1 daily_plans row
++
+0..N daily_plan_items rows
+```
+
+Cloud plan fields:
+
+```text
+workspace_id
+user_id
+plan_date
+planning_completed
+created_at
+updated_at
+```
+
+Use:
+
+```text
+user_id = authenticated session.user.id
+workspace_id = authenticated cloud workspace
+plan_date = local date literal
+```
+
+## Deterministic identity
+
+Because the local plan has no ID, create a deterministic synthetic legacy identity such as:
+
+```text
+daily-plan:<YYYY-MM-DD>
+```
+
+Use the same identity consistently on retries.
+
+Do not use random UUIDs as the migration identity.
+
+The cloud schema's:
+
+```text
+workspace_id + user_id + plan_date
+```
+
+uniqueness must also be respected.
+
+---
+
+# 14. DAILY PLAN ITEMS
+
+Flatten:
+
+```text
+bigRockTaskId
+supportTaskIds
+adminTaskIds
+```
+
+into:
+
+```text
+daily_plan_items
+```
+
+Mapping:
+
+```text
+bigRockTaskId
+→ role BIG_ROCK
+→ position 0
+
+supportTaskIds[index]
+→ role SUPPORT
+→ position index
+
+adminTaskIds[index]
+→ role ADMIN
+→ position index
+```
+
+Resolve each local task ID to its cloud task UUID.
+
+Do NOT alter task priority based on plan role.
+
+The following remain independent:
+
+```text
+tasks.priority
+daily_plan_items.role
+```
+
+---
+
+# 15. DAILY PLAN CONFLICT VALIDATION
+
+Before writing plan items, detect:
+
+* duplicate task IDs
+* task appearing in multiple roles
+* orphan task IDs
+* malformed IDs
+* cross-workspace references
+* impossible role/position combinations
+
+Do NOT silently collapse duplicates.
+
+Do NOT silently choose one role.
+
+Do NOT silently delete an orphaned plan item.
+
+The safest behavior is:
+
+```text
+invalid item
+→ diagnostic
+→ quarantine/skip invalid item
+→ preserve original local plan
+```
+
+A valid independent plan may still migrate if the approved behavior
