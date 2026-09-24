@@ -15,6 +15,13 @@
       "when": 1790213947176,
       "tag": "0001_loose_retro_girl",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1790214615343,
+      "tag": "0002_phase_6c_auth_rls",
+      "breakpoints": true
     }
   ]
 }

@@ -1,0 +1,765 @@
+PHASE 6C: AUTHENTICATION + WORKSPACE BOOTSTRAP + RLS
+
+Phase 6B database foundation has been implemented and independently verified.
+
+Phase 6B.5 verification passed:
+
+* auth.users references
+* composite workspace foreign keys
+* delete behavior
+* constraints
+* indexes
+* updated_at triggers
+* RLS enabled
+* Drizzle migration integrity
+* existing app compatibility
+
+Now implement Phase 6C.
+
+The objective is:
+
+1. Supabase email/password authentication
+2. Authenticated application session handling
+3. User profile bootstrap
+4. First workspace bootstrap
+5. Workspace membership creation
+6. Secure RLS policies
+7. Authenticated route/application behavior
+8. Multi-user isolation testing
+
+DO NOT implement local-to-cloud migration yet.
+
+DO NOT remove or disable localStorage yet.
+
+DO NOT redesign the existing UI.
+
+DO NOT implement collaboration/invitations.
+
+DO NOT add social login.
+
+DO NOT implement billing/subscriptions.
+
+DO NOT turn Express into the primary backend.
+
+DO NOT expose service-role credentials to the browser.
+
+---
+
+# 1. Supabase client
+
+Add the minimum required Supabase client dependency/configuration.
+
+The browser client must use only:
+
+* Supabase project URL
+* Supabase publishable/anon client key
+
+Never expose:
+
+* service_role key
+* secret key
+* database password
+* privileged server credentials
+
+Use environment variables.
+
+Do not hard-code credentials.
+
+If credentials are not available in the Replit environment, create clearly named placeholders/documentation and make the application fail gracefully rather than inventing values.
+
+---
+
+# 2. Authentication scope
+
+Initial authentication supports ONLY:
+
+* Email/password signup
+* Email/password login
+* Logout
+* Existing authenticated session restoration
+* Auth state changes
+
+Do not implement:
+
+* Google
+* Apple
+* GitHub
+* Magic links
+* OTP
+* SSO
+
+Those can be future phases.
+
+Use Supabase Auth as the source of truth for identity.
+
+Do not create a custom users table.
+
+The existing profiles table references:
+
+auth.users(id)
+
+---
+
+# 3. Authentication UI
+
+Add the minimum UI necessary for:
+
+* Sign up
+* Sign in
+* Sign out
+* Authenticated loading state
+* Authentication errors
+
+Keep the existing Wisdom OS visual language.
+
+Do not redesign Today, Brain Dump, Projects, Review, Planning, or Focus Mode.
+
+The unauthenticated experience should clearly lead to authentication.
+
+Do not create a fake authenticated state.
+
+---
+
+# 4. Profile bootstrap
+
+After successful authentication:
+
+Ensure a profile exists for the authenticated user.
+
+Profile:
+
+profiles.id = auth.users.id
+
+Set:
+
+display_name
+
+timezone
+
+created_at
+
+updated_at
+
+Timezone should initially be derived from the browser's IANA timezone when available.
+
+For example:
+
+Africa/Lagos
+
+Do not hard-code Nigeria or any other timezone.
+
+If the browser timezone cannot be determined, use UTC.
+
+Profile creation must be safe to retry.
+
+Do not create duplicate profiles.
+
+---
+
+# 5. First workspace bootstrap
+
+After authentication, ensure the user has a workspace.
+
+For the initial release:
+
+ONE USER → ONE INITIAL WORKSPACE
+
+Do not build multi-workspace UI yet.
+
+The workspace should:
+
+* be created with a generated UUID
+* have a sensible default name
+* use the user's detected timezone
+* set created_by = authenticated user's ID
+
+Then create:
+
+workspace_members:
+workspace_id = new workspace
+user_id = authenticated user
+role = owner
+
+The bootstrap process must be idempotent.
+
+Refreshing the browser must NOT create another workspace.
+
+Signing out and back in must NOT create another workspace.
+
+---
+
+# 6. Starter categories
+
+When the user's first workspace is created, create exactly these five starter categories:
+
+Money
+Build
+Learn
+Admin
+Later
+
+With system_key:
+
+MONEY
+BUILD
+LEARN
+ADMIN
+LATER
+
+They belong to the user's workspace.
+
+Do NOT create global categories.
+
+Do NOT use fixed UUIDs.
+
+Do NOT infer Later behavior from the category name.
+
+The system_key is authoritative.
+
+If bootstrap is retried, do not duplicate categories.
+
+---
+
+# 7. Workspace membership model
+
+The current application is single-user in product behavior, but the database must remain workspace-based.
+
+For Phase 6C:
+
+* creator becomes owner
+* owner can access the workspace
+* no invitation UI
+* no member-management UI
+* no collaboration features
+
+Do not build unused complexity.
+
+The workspace_members table is the security boundary.
+
+---
+
+# 8. RLS architecture
+
+This is the most important part of this phase.
+
+RLS must enforce authorization at the database level.
+
+Never rely on frontend checks alone.
+
+A user should only access workspace-owned data when:
+
+auth.uid() is a member of that workspace.
+
+Create a carefully designed helper function if useful, such as:
+
+is_workspace_member(workspace_id)
+
+IMPORTANT:
+
+Avoid recursive RLS evaluation on workspace_members.
+
+The helper must be implemented safely, preferably using SECURITY DEFINER where appropriate, with a locked-down search_path and no unsafe ability for callers to manipulate it.
+
+Do not blindly copy a generic internet RLS function.
+
+---
+
+# 9. Profiles RLS
+
+Authenticated users may:
+
+SELECT their own profile.
+
+INSERT their own profile.
+
+UPDATE their own profile.
+
+They must not be able to modify another user's profile.
+
+They must not be able to delete another user's profile.
+
+Keep policies based on:
+
+auth.uid() = profiles.id
+
+---
+
+# 10. Workspaces RLS
+
+Authenticated users may SELECT workspaces they belong to.
+
+Only the workspace owner should be able to:
+
+UPDATE workspace settings.
+
+Only the owner should be able to DELETE the workspace.
+
+Workspace creation must ensure:
+
+created_by = auth.uid()
+
+A user must never be able to create a workspace where another user is the creator.
+
+---
+
+# 11. workspace_members RLS
+
+Users may SELECT membership records for workspaces they belong to.
+
+For Phase 6C, membership management should be minimal.
+
+The authenticated user should not be able to:
+
+* promote themselves
+* assign themselves owner/admin
+* insert arbitrary membership records
+* remove another owner
+
+The bootstrap process must safely create the initial owner membership.
+
+Do not expose an unrestricted INSERT policy merely to make signup easier.
+
+Prefer a controlled bootstrap mechanism.
+
+---
+
+# 12. Bootstrap security
+
+The profile/workspace/category bootstrap must be secure and idempotent.
+
+Do not solve bootstrap by giving the browser unrestricted INSERT access to:
+
+workspace_members
+
+or unrestricted access to workspace ownership fields.
+
+Possible approaches:
+
+A. Authenticated database function/RPC with strict auth.uid() validation.
+
+OR
+
+B. Carefully constrained RLS policies that only permit creation of records where the authenticated user is the creator and membership owner.
+
+Prefer the simplest secure approach.
+
+Do not introduce a service-role key into frontend code.
+
+If an RPC is used:
+
+* validate auth.uid()
+* create profile if missing
+* create workspace if missing
+* create owner membership
+* create five starter categories
+* return the workspace ID
+
+Make the operation safe to call repeatedly.
+
+---
+
+# 13. Categories RLS
+
+Workspace members can:
+
+SELECT categories in their workspace.
+
+For Phase 6C, members may:
+
+INSERT
+UPDATE
+
+categories belonging to their workspace.
+
+Deletion should remain restricted because the product uses ARCHIVED status.
+
+The database must prevent changing:
+
+system_key
+
+for system categories through normal client updates.
+
+The Later system behavior must remain stable.
+
+---
+
+# 14. Projects RLS
+
+Workspace members may:
+
+SELECT projects in their workspace.
+
+INSERT projects into their workspace.
+
+UPDATE projects in their workspace.
+
+Deletion should not be broadly enabled because projects are archived.
+
+The database must prevent cross-workspace project manipulation.
+
+---
+
+# 15. Tasks RLS
+
+Workspace members may:
+
+SELECT tasks in their workspace.
+
+INSERT tasks where:
+
+workspace_id belongs to a workspace they are a member of
+
+created_by = auth.uid()
+
+UPDATE tasks in their workspace.
+
+Do not permit a user to insert a task into Workspace A while referencing a category/project from Workspace B.
+
+The existing composite foreign keys must continue enforcing this.
+
+Delete behavior should remain conservative.
+
+Do not add broad task deletion unless required by the existing application.
+
+---
+
+# 16. Daily plans RLS
+
+Daily plans are PERSONAL even though they belong to a workspace.
+
+A user may access a daily plan only when:
+
+workspace membership is valid
+
+AND
+
+daily_plans.user_id = auth.uid()
+
+Therefore:
+
+User A must not be able to read User B's daily plans.
+
+User A must not be able to modify User B's daily plans.
+
+For inserts:
+
+user_id must equal auth.uid()
+
+For updates/deletes:
+
+user_id must equal auth.uid()
+
+---
+
+# 17. daily_plan_items RLS
+
+Access should follow the parent daily plan.
+
+A user may access plan items only when:
+
+* the associated daily plan belongs to them
+* the user is a member of the workspace
+
+Prevent inserting an item into another user's daily plan.
+
+Prevent inserting a task from another workspace.
+
+The existing composite foreign keys remain the final database integrity layer.
+
+---
+
+# 18. Focus sessions RLS
+
+Focus sessions are PERSONAL.
+
+A user may:
+
+SELECT their own focus sessions.
+
+INSERT their own focus sessions.
+
+UPDATE their own focus sessions.
+
+They must not automatically see another user's focus history.
+
+Require:
+
+focus_sessions.user_id = auth.uid()
+
+plus valid workspace membership.
+
+Do not create workspace-wide focus analytics yet.
+
+---
+
+# 19. RLS security tests
+
+Do NOT consider RLS complete because the UI appears correct.
+
+Test actual database authorization.
+
+Create at least two test users:
+
+User A
+User B
+
+Create separate workspaces:
+
+Workspace A
+Workspace B
+
+Verify:
+
+### Workspace isolation
+
+User A cannot SELECT Workspace B.
+
+User B cannot SELECT Workspace A.
+
+### Category isolation
+
+User A cannot read, modify, or create categories in Workspace B.
+
+### Project isolation
+
+User A cannot read, modify, or create projects in Workspace B.
+
+### Task isolation
+
+User A cannot read, modify, or create tasks in Workspace B.
+
+### Cross-workspace references
+
+User A cannot create a task in Workspace A referencing:
+
+* a category from Workspace B
+* a project from Workspace B
+
+### Daily-plan privacy
+
+User A cannot read or modify User B's daily plan.
+
+### Focus-session privacy
+
+User A cannot read or modify User B's focus sessions.
+
+### Membership escalation
+
+User A cannot make themselves:
+
+owner of Workspace B
+
+or
+
+admin of Workspace B.
+
+### Workspace ownership
+
+User A cannot change Workspace B's created_by.
+
+### Profile isolation
+
+User A cannot modify User B's profile.
+
+Record actual database results, not merely frontend behavior.
+
+---
+
+# 20. Session behavior
+
+On application startup:
+
+* restore existing Supabase session
+* show authenticated application only after session state is known
+* avoid flashing the authenticated UI before session restoration completes
+
+On logout:
+
+* clear the Supabase session
+* return to authentication UI
+
+Do not delete localStorage data on logout.
+
+Do not delete cloud data on logout.
+
+---
+
+# 21. Existing localStorage behavior
+
+This phase must NOT migrate or delete local data.
+
+Keep existing:
+
+* tasks
+* projects
+* categories
+* workspace
+* daily plans
+* focus sessions
+* active focus session
+
+in localStorage exactly as they currently work.
+
+Cloud migration is Phase 6D.
+
+Important:
+
+Do not accidentally overwrite existing local data merely because a user signs in.
+
+At the end of Phase 6C, the application should have:
+
+AUTHENTICATED IDENTITY
+
+*
+
+EMPTY/FRESH CLOUD WORKSPACE
+
+*
+
+EXISTING LOCAL WORKSPACE STILL INTACT
+
+Migration comes later.
+
+---
+
+# 22. Express API
+
+Keep:
+
+GET /api/healthz
+
+working.
+
+Do not make Express responsible for ordinary CRUD.
+
+Do not add a service-role database connection just to support authentication.
+
+Do not remove the existing API.
+
+---
+
+# 23. Environment/configuration
+
+Use environment variables for Supabase configuration.
+
+Do not commit secrets.
+
+Do not expose:
+
+SUPABASE_SERVICE_ROLE_KEY
+
+or any equivalent privileged credential to the browser.
+
+If server-side variables are required later, keep them separate from Vite's public environment variables.
+
+---
+
+# 24. UI scope
+
+Keep the existing Wisdom OS UI.
+
+Only add:
+
+* authentication entry screens
+* auth/session loading state
+* logout control where appropriate
+
+Do not redesign existing screens.
+
+Do not modify:
+
+* Focus Mode
+* Daily Planning
+* Brain Dump
+* Projects
+* Review
+
+unless a tiny integration change is strictly required to connect authenticated workspace context.
+
+---
+
+# 25. Verification
+
+After implementation:
+
+Run:
+
+* full TypeScript check
+* production build
+* existing browser smoke test
+* Express health check
+* authentication flow test
+* signup
+* login
+* logout
+* refresh/session restoration
+* workspace bootstrap
+* starter category creation
+* repeated bootstrap/idempotency test
+
+Then perform the two-user RLS isolation tests described above.
+
+If a real Supabase project/database is not available in the environment, DO NOT pretend the RLS tests passed.
+
+Instead:
+
+* verify the SQL/policies statically
+* clearly report that live isolation testing remains blocked until connected to a real Supabase project
+
+Do not fabricate test results.
+
+---
+
+# 26. Important architectural boundary
+
+At the end of Phase 6C:
+
+LOCAL STORAGE
+↓
+still exists
+
+SUPABASE AUTH
+↓
+identity/session
+
+SUPABASE POSTGRES
+↓
+authenticated cloud workspace
+
+RLS
+↓
+authorization
+
+Migration
+↓
+NOT YET IMPLEMENTED
+
+Cloud synchronization
+↓
+NOT YET IMPLEMENTED
+
+This separation is intentional.
+
+---
+
+# Final output
+
+Report:
+
+A. Files created/modified
+B. Dependencies added
+C. Environment variables required
+D. Auth flow implemented
+E. Workspace bootstrap flow
+F. Starter category bootstrap
+G. Exact RLS policies created
+H. Bootstrap mechanism used
+I. Two-user isolation test results
+J. Typecheck/build results
+K. Existing localStorage compatibility
+L. Express health-check result
+M. Any unresolved security concern
+
+Do not proceed into Phase 6D automatically.
+
+Stop after Phase 6C.
