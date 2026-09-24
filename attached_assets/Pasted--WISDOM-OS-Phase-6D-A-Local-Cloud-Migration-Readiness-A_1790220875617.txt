@@ -1,0 +1,643 @@
+# WISDOM OS — Phase 6D-A: Local → Cloud Migration Readiness Audit
+
+We are preparing to migrate the existing WISDOM OS browser-local data layer to the already-configured Supabase/Postgres backend.
+
+Phase 6C.5 is COMPLETE and CLOSED.
+
+The live Supabase environment has already been verified with two authenticated test users. Authentication, workspace bootstrap, RLS, workspace isolation, ownership protection, membership protection, composite foreign keys, daily-plan privacy, focus-session privacy, and migration reproducibility have all passed.
+
+## IMPORTANT: THIS IS AN AUDIT ONLY
+
+Do NOT implement the migration yet.
+
+Do NOT modify application behavior.
+
+Do NOT change TaskContext.
+
+Do NOT change storage behavior.
+
+Do NOT delete or rewrite localStorage data.
+
+Do NOT add migration code.
+
+Do NOT change the database schema.
+
+Do NOT create new Supabase tables, policies, RPCs, or migrations.
+
+Do NOT reset or rebuild the database.
+
+Do NOT alter authentication.
+
+Do NOT remove the existing localStorage persistence.
+
+This phase is READ-ONLY.
+
+You may inspect the complete repository, existing application code, localStorage/storage implementation, current domain types, Supabase integration, database schema/migrations, and existing tests.
+
+At the end, produce a detailed migration-readiness report only.
+
+---
+
+# OBJECTIVE
+
+Determine exactly how the current local WISDOM OS data maps to the current Supabase cloud schema and identify every issue that must be handled before implementing Phase 6D.
+
+The report must be based on the ACTUAL current code and schema.
+
+Do not infer data shapes from earlier plans or documentation if the current implementation differs.
+
+---
+
+# 1. AUDIT THE CURRENT LOCAL DATA LAYER
+
+Inspect the actual implementation of:
+
+* TaskContext
+* storage.ts
+* types.ts
+* mockData.ts
+* workspace state
+* category state
+* project state
+* task state
+* daily plan state
+* focus session state
+* active focus session state
+* localStorage key generation
+* workspace switching/reset behavior
+* legacy localStorage migration behavior
+
+Document the exact persisted shape of each collection.
+
+Specifically identify:
+
+* workspace object shape
+* categories array/object shape
+* projects array/object shape
+* tasks array/object shape
+* dailyPlans array/object shape
+* focusSessions array/object shape
+* activeFocusSession shape
+* local workspace ID
+* any legacy IDs
+* timestamps and their formats
+* nullable fields
+* optional fields
+* enum values
+* status values
+* priority values
+* category system keys
+* project relationships
+* task relationships
+* daily-plan relationships
+* focus-session relationships
+
+Do not merely describe TypeScript interfaces.
+
+Trace the actual serialization/deserialization path and confirm what is really written to localStorage.
+
+---
+
+# 2. AUDIT THE CURRENT LOCAL STORAGE KEYS
+
+List every relevant localStorage key currently used by WISDOM OS.
+
+Include:
+
+* current workspace key
+* workspace-scoped collection keys
+* legacy unscoped keys
+* active focus session key
+* any migration/version keys
+* any other keys related to WISDOM OS state
+
+Document exactly how the application determines which workspace owns the local data.
+
+Determine whether multiple local workspaces can currently exist simultaneously and how they are selected.
+
+---
+
+# 3. MAP LOCAL ENTITIES TO SUPABASE ENTITIES
+
+Create an explicit mapping table:
+
+Local entity → Cloud table → Cloud primary key → Legacy ID field → Required transformation
+
+At minimum cover:
+
+* Workspace
+* Category
+* Project
+* Task
+* DailyPlan
+* DailyPlan item
+* FocusSession
+* ActiveFocusSession
+* User/Profile
+
+Pay special attention to the fact that:
+
+### Local IDs
+
+The existing application uses local IDs.
+
+### Cloud IDs
+
+The Supabase schema uses UUID primary keys.
+
+### Migration identity
+
+The cloud schema has nullable `legacy_id` fields intended to preserve the original local identifiers.
+
+Determine exactly how these should be used to make migration idempotent.
+
+---
+
+# 4. DAILY PLAN MIGRATION
+
+This requires special attention.
+
+The local model currently represents daily planning using fields such as:
+
+* bigRockTaskId
+* supportTaskIds
+* adminTaskIds
+
+The cloud model uses:
+
+* daily_plans
+* daily_plan_items
+
+Inspect the actual implementation and determine exactly how every local daily plan should become:
+
+1. one cloud `daily_plans` row
+2. zero or more `daily_plan_items` rows
+
+Map:
+
+* Big Rock → role
+* Support → role
+* Admin → role
+* ordering/position
+* task relationship
+* plan date
+* planningCompleted
+* timestamps
+
+Determine what should happen if:
+
+* a referenced task no longer exists
+* the same task appears more than once
+* an ID is null
+* arrays are empty
+* a task appears in multiple roles
+* a plan references a task belonging to another local workspace
+* malformed local data exists
+
+Do not fix anything yet. Just report the required migration behavior.
+
+---
+
+# 5. TASK PRIORITY VS DAILY PLAN ROLE
+
+The cloud architecture intentionally keeps:
+
+* Task priority as current task state
+* Daily plan item role as historical plan membership
+
+Audit whether the current local implementation duplicates these concepts.
+
+Determine whether the migration should preserve:
+
+* task.priority
+* daily_plan_items.role
+
+independently.
+
+Identify any inconsistencies that may already exist locally, for example:
+
+* a task marked BIG_ROCK but appearing as SUPPORT in a historical plan
+* a task marked SUPPORT but not appearing in today's plan
+* multiple planned tasks with the same priority
+* tasks appearing in plans but currently having priority NONE
+
+Do not normalize or silently change these values during migration.
+
+Report how they should be preserved.
+
+---
+
+# 6. CATEGORY MIGRATION
+
+Inspect how categories currently work.
+
+Determine:
+
+* built-in category system keys
+* custom categories
+* Later category behavior
+* category IDs
+* category names
+* category statuses
+* legacy IDs
+* archived categories
+* category/task relationships
+
+Verify that the migration can preserve the stable:
+
+`system_key = LATER`
+
+behavior.
+
+Determine how task.categoryId should map to cloud category UUIDs.
+
+Identify what should happen if a task references a missing category.
+
+---
+
+# 7. PROJECT MIGRATION
+
+Inspect project behavior.
+
+Determine:
+
+* project IDs
+* project names
+* descriptions
+* status
+* archive behavior
+* task relationships
+* legacy IDs
+
+Determine the exact order required for migrating projects and tasks.
+
+---
+
+# 8. WORKSPACE MIGRATION
+
+Inspect the current local workspace implementation.
+
+Determine:
+
+* current local workspace ID
+* workspace name
+* createdAt
+* updatedAt
+* timezone
+* reset behavior
+* starter workspace behavior
+* whether local data can exist without a workspace
+* whether multiple local workspaces can exist
+
+Then map this to:
+
+* Supabase Auth user
+* profiles
+* workspaces
+* workspace_members
+
+Determine how the authenticated user's initial cloud workspace should be associated with the local workspace during migration.
+
+Do NOT create or modify any cloud workspace during this audit.
+
+---
+
+# 9. AUTHENTICATED USER MAPPING
+
+Inspect the current AuthContext and Supabase integration.
+
+Determine exactly which authenticated user identity is available to the frontend.
+
+Document:
+
+* auth user ID
+* email availability
+* profile information available
+* workspace ID availability
+* current bootstrap behavior
+* how the app currently knows which cloud workspace belongs to the authenticated user
+
+Determine what Phase 6D needs to assume about authentication.
+
+The migration must never trust a user-provided workspace/user ID as an authorization mechanism.
+
+---
+
+# 10. FOCUS SESSION MIGRATION
+
+Audit:
+
+* FocusSession
+* ActiveFocusSession
+
+Determine the exact difference between historical completed/ended focus sessions and the currently active focus session.
+
+The cloud schema stores historical focus sessions but does NOT use the active-focus localStorage object as a normal historical row.
+
+Determine exactly what should happen during migration if:
+
+* no active session exists
+* an active session is IDLE
+* an active session is RUNNING
+* an active session is PAUSED
+* an active session is COMPLETED
+* an active session is ENDED
+* the active session references a missing task
+* an active session has stale timestamps
+
+Do not implement behavior. Report the migration rule that should be used.
+
+---
+
+# 11. TIMESTAMPS AND TIMEZONES
+
+Audit all timestamp handling.
+
+Determine:
+
+* whether timestamps are ISO strings
+* whether they include timezone offsets
+* whether any are timezone-less
+* whether local dates are derived from browser local time
+* how DailyPlan.plan_date is determined
+* how workspace timezone is currently represented
+* how focus session timestamps are represented
+
+Compare this with the cloud schema:
+
+* `timestamptz`
+* `date`
+* explicit workspace timezone
+
+Identify any conversion risks.
+
+Do not silently reinterpret dates.
+
+---
+
+# 12. EMPTY / MALFORMED / LEGACY DATA
+
+Determine how migration should behave when localStorage contains:
+
+* empty arrays
+* null values
+* missing collections
+* malformed JSON
+* partially migrated legacy data
+* duplicate IDs
+* orphaned task references
+* orphaned project references
+* orphaned category references
+* invalid statuses
+* invalid priorities
+* invalid dates
+* duplicate daily-plan membership
+
+The migration should not silently corrupt data.
+
+Report:
+
+* what should be migrated
+* what should be skipped
+* what should cause migration failure
+* what should be logged
+* what should be recoverable/retryable
+
+---
+
+# 13. MIGRATION ORDER
+
+Based on the actual current code and current cloud schema, produce the exact recommended migration sequence.
+
+For example, determine whether the correct dependency order is:
+
+1. authenticated user/profile
+2. workspace
+3. membership
+4. categories
+5. projects
+6. tasks
+7. daily plans
+8. daily plan items
+9. focus sessions
+10. active session handling
+
+Do not assume this exact sequence is correct. Verify it against the real foreign-key relationships.
+
+Explain every dependency.
+
+---
+
+# 14. IDEMPOTENCY AND RETRY SAFETY
+
+This is critical.
+
+Design the migration conceptually so that if it is interrupted:
+
+* halfway through categories
+* halfway through projects
+* halfway through tasks
+* halfway through daily plans
+* halfway through focus sessions
+
+running it again does NOT create duplicates.
+
+Use the existing local IDs / `legacy_id` strategy where appropriate.
+
+Determine which cloud records should be matched using:
+
+* legacy_id
+* workspace_id + legacy_id
+* other unique constraints
+
+Identify any current schema limitations that could prevent safe idempotency.
+
+Do not modify the schema in this phase.
+
+---
+
+# 15. MIGRATION TRANSACTION BOUNDARIES
+
+Determine which parts of migration should be atomic and which can safely be processed in batches.
+
+Consider that the migration may involve many local records.
+
+Identify whether:
+
+* one giant transaction is appropriate
+* per-entity transactions are appropriate
+* staged migration is safer
+* verification checkpoints are needed
+
+Focus on reliability, not premature optimization.
+
+---
+
+# 16. VERIFICATION STRATEGY
+
+Design a post-migration verification strategy.
+
+At minimum determine how to compare:
+
+Local counts:
+
+* workspaces
+* categories
+* projects
+* tasks
+* daily plans
+* daily plan items
+* focus sessions
+
+against cloud counts.
+
+Also verify:
+
+* category relationships
+* project relationships
+* task relationships
+* daily plan membership
+* task roles
+* focus-session task relationships
+* workspace ownership
+* user ownership
+
+Determine which invariants must pass before the application is allowed to switch from local reads/writes to cloud reads/writes.
+
+---
+
+# 17. FAILURE AND RECOVERY
+
+Design the migration failure model.
+
+If migration fails after some cloud records have already been created:
+
+* how does the next attempt detect them?
+* how does it avoid duplicates?
+* how does it resume?
+* how does it report the failed entity?
+* can the user safely retry?
+* does local data remain untouched?
+
+The safest assumption should be:
+
+> Local data remains authoritative until cloud migration has been fully verified.
+
+Confirm whether the current architecture supports this.
+
+---
+
+# 18. LOCAL DATA PRESERVATION
+
+Determine exactly when localStorage should be:
+
+* preserved
+* marked as migrated
+* switched from authoritative to fallback
+* eventually cleaned up
+
+Do NOT delete local data during Phase 6D.
+
+Recommend a safe sequence such as:
+
+LOCAL DATA
+↓
+MIGRATE
+↓
+VERIFY
+↓
+MARK CLOUD MIGRATION SUCCESSFUL
+↓
+SWITCH APP READ/WRITE AUTHORITY
+↓
+OPTIONAL FUTURE CLEANUP
+
+Verify whether this matches the current architecture.
+
+---
+
+# 19. CODE LOCATIONS
+
+List the exact files that Phase 6D implementation will likely need to modify.
+
+Separate them into:
+
+### Must modify
+
+Files that will definitely need changes.
+
+### Probably modify
+
+Files likely to change depending on implementation.
+
+### Must NOT modify
+
+Files that should remain untouched during migration.
+
+Do not modify these files during this audit.
+
+---
+
+# 20. FINAL READINESS VERDICT
+
+End with:
+
+## Phase 6D Readiness
+
+Choose exactly one:
+
+* READY
+* READY WITH CONDITIONS
+* NOT READY
+
+Then provide:
+
+### Blocking issues
+
+Anything that must be resolved before implementation.
+
+### Non-blocking issues
+
+Things worth addressing but not required to begin.
+
+### Recommended migration architecture
+
+A concise implementation plan based ONLY on the actual repository/schema.
+
+### Exact implementation sequence
+
+The phases Replit should execute once we approve Phase 6D implementation.
+
+### Safety invariants
+
+A short checklist of conditions that must remain true throughout migration.
+
+---
+
+# HARD RULES
+
+Again:
+
+This is an AUDIT ONLY.
+
+No code changes.
+
+No database changes.
+
+No Supabase writes.
+
+No localStorage writes.
+
+No user creation.
+
+No migration execution.
+
+No destructive operations.
+
+No schema changes.
+
+No authentication changes.
+
+Inspect first. Reason from the actual code. Report findings.
+
+The next phase will be implementation only after this readiness audit is reviewed and approved.
