@@ -1,0 +1,562 @@
+## WISDOM OS - PHASE 4.5: GENERIC USER-CENTERED ARCHITECTURE
+
+Continue working on the existing Wisdom OS project/repository.
+
+Do NOT rebuild the app from scratch. Do NOT redesign the existing UI unnecessarily.
+
+The current Phase 1-4 functionality must remain working:
+
+* App shell/navigation
+* Brain Dump
+* Task organization
+* Daily Planning Engine
+* Big Rock / Support / Admin structure
+* Today view
+* Task completion
+* Focus Mode
+* 25/50/90-minute timer
+* Procrastination 5-minute reset
+* Local persistence
+* Existing responsive/mobile-first design
+
+### PRIMARY OBJECTIVE
+
+We need to correct an important architectural issue before continuing development.
+
+Wisdom OS is a productivity system, not an app built around my personal tasks.
+
+Any tasks, projects, names, dates, or specific work areas currently visible in the app should be treated as EXAMPLE/SEED DATA only.
+
+The application must become generic enough that:
+
+1. I can continuously add completely new tasks and projects.
+2. I can use the system for any area of my life or work.
+3. Another person can eventually use the same application with their own completely separate data.
+4. We can later add authentication and a cloud database without rewriting the entire application.
+
+---
+
+# 1. REMOVE HARD-CODED PERSONAL DATA
+
+Audit the entire codebase for hard-coded:
+
+* Task names
+* Project names
+* Specific personal projects
+* Personal work categories
+* Fixed user names
+* Fixed dates
+* Example tasks embedded directly in UI components
+* Logic that assumes a specific task/project exists
+
+Examples such as:
+
+* Ecommerce Automation
+* Client Work
+* Python & AI
+* Wizmerce
+* Personal
+* Specific example task names
+
+must NOT be part of the application's business logic.
+
+They may exist only as optional sample/demo data.
+
+The application should work perfectly even if those examples do not exist.
+
+---
+
+# 2. CREATE A USER/WORKSPACE MODEL
+
+We are NOT adding real authentication or a backend yet.
+
+However, create a lightweight local workspace/user abstraction so the architecture is ready for authentication later.
+
+Create a model similar to:
+
+UserProfile:
+
+* id
+* name
+* createdAt
+* setupCompleted
+
+Workspace:
+
+* id
+* name
+* createdAt
+
+For now, use localStorage to persist the current workspace/user.
+
+The important thing is that the rest of the application should reference the current workspace instead of assuming everything belongs to one global user.
+
+---
+
+# 3. NAMESPACE LOCAL STORAGE
+
+Stop using one global set of localStorage keys for everything.
+
+Structure persistence so data is associated with the current workspace.
+
+For example:
+
+wisdomOS:workspace:{workspaceId}:tasks
+wisdomOS:workspace:{workspaceId}:projects
+wisdomOS:workspace:{workspaceId}:categories
+wisdomOS:workspace:{workspaceId}:dailyPlans
+wisdomOS:workspace:{workspaceId}:focusSessions
+wisdomOS:workspace:{workspaceId}:profile
+
+Use whatever equivalent implementation fits the existing codebase.
+
+Create a small storage/persistence layer if necessary so the rest of the application does not directly depend on raw localStorage everywhere.
+
+This is preparation for eventually replacing localStorage with a backend such as Supabase.
+
+DO NOT add Supabase or authentication yet.
+
+---
+
+# 4. MAKE CATEGORIES DATA-DRIVEN
+
+The current categories:
+
+MONEY
+BUILD
+LEARN
+ADMIN
+LATER
+
+should become starter categories, NOT hard-coded permanent categories.
+
+Create a Category model such as:
+
+* id
+* name
+* description (optional)
+* createdAt
+* archived
+
+Tasks should reference categories dynamically.
+
+The Brain Dump category selector must load categories from the current workspace.
+
+A user should eventually be able to create categories such as:
+
+* Business
+* Family
+* Health
+* School
+* Freelance
+* Finance
+* Personal
+* etc.
+
+Do not restrict users to the existing five categories.
+
+---
+
+# 5. CATEGORY MANAGEMENT
+
+Add a lightweight category-management interface.
+
+Do not add another major navigation tab unless the current architecture strongly requires it.
+
+A Settings/menu area is acceptable.
+
+Users should be able to:
+
+* Create a category
+* Rename a category
+* Archive a category
+
+Avoid permanently deleting a category if tasks currently depend on it.
+
+If a category has active tasks, either:
+
+* require those tasks to be reassigned before deletion, OR
+* archive the category instead.
+
+Keep this implementation simple and consistent with the existing UI.
+
+---
+
+# 6. MAKE PROJECTS FULLY DATA-DRIVEN
+
+Projects must no longer be hard-coded.
+
+Create/use a Project model containing at minimum:
+
+* id
+* name
+* description
+* status: ACTIVE or ARCHIVED
+* createdAt
+* updatedAt
+
+The Projects page should allow the user to:
+
+* Create a project
+* View projects
+* Open/view project details
+* Edit a project
+* Archive a project
+
+The user should be able to create unlimited projects.
+
+Do not assume what the projects are.
+
+For example, a user could create:
+
+"Launch My Website"
+
+"Study Python"
+
+"Client ABC"
+
+"Plan Wedding"
+
+"Build SaaS"
+
+or anything else.
+
+---
+
+# 7. BRAIN DUMP MUST USE REAL DATA
+
+Update Brain Dump so:
+
+Category selection comes from the current workspace's categories.
+
+Project selection comes from the current workspace's projects.
+
+No category or project should be hard-coded into the Brain Dump interface.
+
+If no projects exist, the UI should gracefully allow the task to exist without a project.
+
+If no custom categories exist, the starter categories should be available.
+
+---
+
+# 8. TODAY VIEW MUST REMAIN GENERIC
+
+Today should continue to derive its content from DailyPlan.
+
+It must not contain specific hard-coded tasks.
+
+The system should work whether the user has:
+
+* 1 task
+* 10 tasks
+* 100 tasks
+* completely different projects
+* completely different categories
+
+Maintain the existing rule:
+
+* Exactly 1 Big Rock
+* Maximum 2 Support Tasks
+* Admin tasks as needed
+
+Do not weaken this constraint.
+
+---
+
+# 9. PRESERVE EXISTING USER DATA
+
+This is important.
+
+DO NOT simply wipe the existing localStorage/database state.
+
+If the current implementation already contains example tasks/projects, migrate them safely into the current workspace.
+
+The existing functionality should continue working after this architectural change.
+
+If a migration is required, create a small migration layer.
+
+Do not break existing tasks or DailyPlans.
+
+---
+
+# 10. OPTIONAL SAMPLE DATA
+
+Create a clean distinction between:
+
+REAL USER DATA
+
+and
+
+SAMPLE/DEMO DATA.
+
+Sample data can be loaded intentionally for testing.
+
+For example, provide a "Load Sample Data" action somewhere appropriate.
+
+Sample data can contain example:
+
+* Tasks
+* Projects
+* Categories
+
+But sample data must NEVER be required for the application to function.
+
+A completely new workspace should be able to start blank.
+
+---
+
+# 11. FIRST-RUN EXPERIENCE
+
+Add a lightweight first-run setup if the current architecture allows it without creating unnecessary complexity.
+
+The first-run experience should ask for:
+
+"What's your name?"
+
+Then allow the user to choose something like:
+
+* Start with a blank workspace
+* Start with starter categories
+* Load sample data
+
+Keep it simple.
+
+Do not add authentication yet.
+
+Do not add email/password forms yet.
+
+Do not add social login yet.
+
+Those belong to the future authentication phase.
+
+---
+
+# 12. USER NAME MUST BE DYNAMIC
+
+If the interface currently displays a hard-coded name such as "Wisdom", replace that with the current user's profile name where appropriate.
+
+The application brand can remain:
+
+Wisdom OS
+
+But the person using the application must be represented dynamically.
+
+Example:
+
+"Good morning, Wisdom"
+
+should become:
+
+"Good morning, {user.name}"
+
+---
+
+# 13. REMOVE HARDCODED DATES
+
+Search the codebase for fixed dates or dates used only for the current demo.
+
+Do not hard-code something like:
+
+"Wednesday, September 23"
+
+The application should calculate the current date dynamically.
+
+DailyPlan dates should be stored in a reliable machine-readable format and displayed according to the user's locale.
+
+---
+
+# 14. KEEP FOCUS MODE WORKING
+
+Do not break Phase 4.
+
+Focus Mode must continue working with the newly generic task/project architecture.
+
+A FocusSession should still reference the relevant task where appropriate.
+
+Verify:
+
+* 25-minute session
+* 50-minute session
+* 90-minute session
+* Pause
+* Resume
+* End
+* Complete
+* Refresh recovery
+* Browser/tab recovery
+* Session history
+* 5-minute procrastination reset
+
+still work after the data-model changes.
+
+---
+
+# 15. PREPARE FOR FUTURE BACKEND MIGRATION
+
+Where practical, separate:
+
+UI
+
+Business Logic
+
+Data Models
+
+Persistence
+
+For example, instead of having UI components directly manipulate localStorage everywhere, create reusable data/storage functions.
+
+The goal is that later we can replace:
+
+LocalStorage
+
+with:
+
+Supabase/Postgres
+
+without rewriting the entire UI.
+
+Do not over-engineer this.
+
+We only need a clean abstraction layer.
+
+---
+
+# 16. IMPORTANT MULTI-USER REQUIREMENT
+
+The architecture must NOT assume that one installation of the app equals one person.
+
+Eventually:
+
+User A
+→ their account
+→ their workspace
+→ their tasks
+→ their projects
+→ their categories
+→ their daily plans
+→ their focus sessions
+
+User B
+→ completely separate account
+→ completely separate workspace
+→ completely separate data
+
+For this phase, localStorage is acceptable because authentication has not been implemented yet.
+
+But structure the code so authentication/database can be added later.
+
+Do NOT implement fake security claims.
+
+LocalStorage is not secure multi-user authentication.
+
+---
+
+# 17. TEST THE ARCHITECTURE
+
+After making the changes, test the following:
+
+TEST 1:
+Create 10 completely arbitrary tasks with different names.
+
+They should work normally.
+
+TEST 2:
+Create a new category called "Business".
+
+Assign tasks to it.
+
+It should appear dynamically in Brain Dump and task organization.
+
+TEST 3:
+Create a project called "Build My Website".
+
+Assign tasks to it.
+
+The project should appear dynamically.
+
+TEST 4:
+Create another project with a completely unrelated name.
+
+Confirm nothing in the application assumes a specific project exists.
+
+TEST 5:
+Archive a project.
+
+Confirm its existing tasks are handled gracefully and the project no longer appears as an active project.
+
+TEST 6:
+Refresh the browser.
+
+All data should persist.
+
+TEST 7:
+Create a blank workspace/new user profile.
+
+Confirm it does NOT automatically receive my personal/example tasks.
+
+TEST 8:
+Load sample data.
+
+Confirm sample tasks/projects/categories can be intentionally added.
+
+TEST 9:
+Create a DailyPlan using the new generic tasks.
+
+Confirm Today works.
+
+TEST 10:
+Start a Focus Mode session from a generic task.
+
+Confirm Focus Mode still works.
+
+---
+
+# 18. DO NOT DO THESE THINGS YET
+
+Do NOT implement:
+
+* Authentication
+* Supabase
+* Cloud database
+* Payments
+* Subscriptions
+* Team collaboration
+* Public sharing
+* Social login
+* Notifications
+* AI assistant
+* Analytics dashboard
+* Mobile app packaging
+
+Those are later phases.
+
+This phase is strictly about fixing the architecture and making Wisdom OS genuinely generic and user-centered.
+
+---
+
+# 19. FINAL QUALITY CHECK
+
+Before finishing:
+
+1. Run the application.
+2. Check for TypeScript errors.
+3. Check for runtime errors.
+4. Check browser console.
+5. Verify existing Phase 1-4 functionality.
+6. Verify data persistence.
+7. Verify new categories work.
+8. Verify new projects work.
+9. Verify arbitrary tasks work.
+10. Verify no personal/example data is required for the app to function.
+11. Verify no major UI redesign occurred.
+12. Keep the existing visual language and mobile-first experience.
+
+At the end, give me a concise summary of:
+
+* Files/components changed
+* Data model changes
+* Migration changes
+* What was tested
+* Any issues that still need attention
+
+Do not move on to Phase 5 yet.

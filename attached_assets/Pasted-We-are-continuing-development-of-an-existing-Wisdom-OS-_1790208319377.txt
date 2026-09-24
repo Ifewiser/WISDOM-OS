@@ -1,0 +1,579 @@
+We are continuing development of an existing Wisdom OS productivity app.
+
+IMPORTANT:
+This is a surgical architecture refactor, NOT a redesign and NOT a feature-expansion sprint.
+
+Before changing anything:
+1. Inspect the existing codebase.
+2. Preserve all currently working functionality:
+   - Today
+   - Brain Dump
+   - Daily Planning
+   - Focus Mode
+   - Review
+   - task completion
+   - daily plans
+   - focus session history
+3. Preserve the existing visual design and UX.
+4. Do NOT add authentication.
+5. Do NOT add a database.
+6. Do NOT introduce a new UI framework.
+7. Do NOT rewrite the application from scratch.
+8. Do NOT remove existing functionality just to simplify the implementation.
+9. Make the smallest clean architectural changes necessary.
+
+The current application is a single-user localStorage prototype, but it currently contains hard-coded personal/example data. We need to separate the application engine from the user's data.
+
+==================================================
+GOAL
+==================================================
+
+Refactor Wisdom OS so that:
+
+APPLICATION LOGIC
+    ↓
+USER/WORKSPACE DATA
+    ↓
+Tasks
+Projects
+Categories
+Daily Plans
+Focus Sessions
+
+Instead of:
+
+UI
+    ↓
+mockData.ts
+    ↓
+hard-coded personal projects/tasks/categories
+
+The application must be capable of eventually supporting different users with different projects and categories without modifying the application code.
+
+For now, localStorage remains the persistence layer.
+
+==================================================
+1. PROJECTS MUST BECOME REAL APPLICATION DATA
+==================================================
+
+Currently:
+- src/mockData.ts contains projects.
+- ProjectsScreen.tsx imports projects directly from mockData.
+- OrganizeSheet.tsx imports projects directly from mockData.
+- Projects are not stored in TaskContext.
+
+Change this.
+
+Create a proper project data model and make projects available through the application's state/data layer.
+
+The Project model should at minimum contain:
+
+id
+name
+description
+createdAt
+updatedAt
+
+Add a sensible status field if useful for future archiving, such as:
+status: 'ACTIVE' | 'ARCHIVED'
+
+Do not over-engineer this.
+
+Add project state and persistence to the existing context/storage architecture.
+
+The UI should obtain projects through the application state layer rather than importing them from mockData.
+
+Update:
+- ProjectsScreen.tsx
+- OrganizeSheet.tsx
+- any other components that directly import projects from mockData
+
+so they use the application's project state.
+
+Existing project functionality must continue working.
+
+==================================================
+2. CATEGORIES MUST BECOME DATA-DRIVEN
+==================================================
+
+Currently categories are hard-coded:
+
+'MONEY'
+'BUILD'
+'LEARN'
+'ADMIN'
+'LATER'
+
+and CATEGORY_LABELS is hard-coded in types.ts.
+
+Refactor categories so they are represented as data.
+
+Create a Category model containing at minimum:
+
+id
+name
+createdAt
+updatedAt
+
+Optionally include a simple status field if needed.
+
+Tasks should reference a category by categoryId rather than depending on a hard-coded TaskCategory union.
+
+IMPORTANT:
+Do NOT blindly delete the existing TaskCategory type if existing components still depend on it.
+
+Perform a controlled migration.
+
+Existing tasks using:
+
+MONEY
+BUILD
+LEARN
+ADMIN
+LATER
+
+must continue working after the refactor.
+
+Create default starter categories corresponding to those five categories so the current workflow is preserved.
+
+Their display names should initially be:
+
+Money
+Build
+Learn
+Admin
+Later
+
+Do NOT force these categories into application code permanently.
+
+The goal is that categories can eventually be changed or customized by a user without changing TypeScript source code.
+
+==================================================
+3. UPDATE ORGANIZE SHEET
+==================================================
+
+OrganizeSheet.tsx currently contains:
+
+const categories: TaskCategory[] = [
+  'MONEY',
+  'BUILD',
+  'LEARN',
+  'ADMIN',
+  'LATER'
+];
+
+and imports CATEGORY_LABELS from types.ts.
+
+Remove this hard-coded category list from the component.
+
+OrganizeSheet should receive/read categories from the application state layer.
+
+It should dynamically render whatever categories exist for the current workspace.
+
+Preserve the existing UX and styling.
+
+IMPORTANT:
+The special behavior currently associated with the LATER category must not be lost.
+
+Currently:
+- LATER forces priority to NONE
+- LATER clears nextAction
+
+Preserve this behavior during migration.
+
+If categories become fully generic, do not rely on the literal string 'LATER' as the long-term architecture.
+
+Instead, introduce a safe mechanism for the starter "Later" category to retain this behavior during migration, while keeping the category system data-driven.
+
+Do not over-engineer a full rules engine.
+
+==================================================
+4. REMOVE PRODUCTION DEPENDENCY ON mockData
+==================================================
+
+mockData.ts currently contains:
+
+- personal/example projects
+- personal/example tasks
+
+These must no longer be the default source of application data.
+
+A brand-new workspace/user should NOT automatically receive personal example tasks such as:
+
+"Build my first ecommerce automation workflow"
+
+or:
+
+"Reply to client messages"
+
+Those are developer/sample data, not universal application data.
+
+Convert mockData.ts into optional seed/demo data only.
+
+For example, it may expose sample data through a function such as:
+
+createSampleData()
+
+but the application must not automatically use it as the fallback when localStorage is empty.
+
+The existing TaskContext currently does:
+
+loadTasks() ?? initialTasks
+
+Change this behavior.
+
+A new empty workspace should start with:
+- no tasks
+- starter categories
+- no personal/example projects unless explicitly seeded
+
+Do NOT remove the ability to use sample data for development/testing.
+
+==================================================
+5. PRESERVE EXISTING USER DATA
+==================================================
+
+This is extremely important.
+
+The existing app already stores data using:
+
+wisdomos:tasks
+wisdomos:dailyPlans
+wisdomos:focusSessions
+wisdomos:activeFocusSession
+
+Do NOT simply change the storage keys and cause existing data to disappear.
+
+Implement a lightweight migration/compatibility strategy.
+
+If legacy data exists:
+
+wisdomos:tasks
+wisdomos:dailyPlans
+wisdomos:focusSessions
+wisdomos:activeFocusSession
+
+the application should continue to recognize it.
+
+Existing tasks must not disappear.
+
+Existing daily plans must not disappear.
+
+Existing focus sessions must not disappear.
+
+Existing task category values should be mapped to the new category records.
+
+Existing project IDs such as:
+
+p1
+p2
+p3
+p4
+p5
+
+should continue resolving correctly.
+
+Because the old project records currently live in mockData.ts rather than localStorage, preserve those project definitions during migration when existing tasks reference them.
+
+After migration, the projects should be persisted as real project data.
+
+Do not duplicate data on every application load.
+
+Migration should be idempotent.
+
+==================================================
+6. WORKSPACE-SCOPED LOCAL STORAGE
+==================================================
+
+Prepare the architecture for future multi-user support without implementing authentication yet.
+
+Introduce a simple local workspace identity.
+
+For example:
+
+workspaceId
+
+The exact implementation is up to you, but it should be stable across page refreshes.
+
+Persist the workspace ID locally.
+
+Application data should conceptually belong to the current workspace:
+
+workspace
+ ├── tasks
+ ├── projects
+ ├── categories
+ ├── dailyPlans
+ └── focusSessions
+
+Do NOT implement login or accounts.
+
+Do NOT connect a database.
+
+Do NOT build authentication.
+
+This is only preparing the local architecture so that future authentication/database work does not require another complete rewrite.
+
+==================================================
+7. STORAGE ARCHITECTURE
+==================================================
+
+Update src/storage.ts so storage responsibilities remain centralized.
+
+Do not scatter localStorage calls throughout components.
+
+The existing storage abstraction should remain the single place responsible for persistence.
+
+Add storage functions for:
+
+projects
+categories
+workspace identity
+
+Keep existing storage functions for:
+
+tasks
+daily plans
+focus sessions
+active focus session
+
+Use workspace-aware keys where appropriate.
+
+Handle legacy keys safely during migration.
+
+==================================================
+8. TASK MODEL MIGRATION
+==================================================
+
+Current Task:
+
+category: TaskCategory | null
+
+Move toward:
+
+categoryId: string | null
+
+while preserving compatibility during migration.
+
+Existing tasks must be transformed safely.
+
+Do not lose:
+- title
+- status
+- priority
+- nextAction
+- projectId
+- createdAt
+
+If a task references an unknown category during migration, do not crash.
+
+Use a sensible fallback such as null or the appropriate starter category.
+
+==================================================
+9. PROJECTS SCREEN
+==================================================
+
+ProjectsScreen currently imports:
+
+import { projects } from '@/mockData';
+
+Remove this dependency.
+
+Read projects from the application state/data layer.
+
+Keep the existing project cards and active task counts working.
+
+Do not redesign this screen.
+
+For this phase, basic project state/persistence is enough.
+
+Do NOT spend this phase building a large project-management system.
+
+==================================================
+10. TASK CONTEXT
+==================================================
+
+TaskContext currently manages:
+
+tasks
+dailyPlans
+focusSessions
+
+Extend it to provide the project/category data needed by the UI.
+
+Maintain the existing public task APIs wherever possible.
+
+Do not unnecessarily rename existing functions.
+
+Existing screens should continue to work after the refactor.
+
+If a dedicated ProjectContext or CategoryContext is cleaner, that is acceptable, but do not create unnecessary complexity.
+
+The priority is a clean architecture with minimal changes.
+
+==================================================
+11. INITIAL WORKSPACE DATA
+==================================================
+
+When there is no existing workspace/data:
+
+Create a clean workspace with:
+
+Categories:
+- Money
+- Build
+- Learn
+- Admin
+- Later
+
+Projects:
+none
+
+Tasks:
+none
+
+Daily plans:
+none
+
+Focus sessions:
+none
+
+The application should therefore open as a genuinely blank productivity system for a new user.
+
+Do NOT populate it with my personal productivity tasks.
+
+==================================================
+12. DEVELOPMENT SAMPLE DATA
+==================================================
+
+Keep the existing sample tasks/projects available for development/testing if useful.
+
+But they must be explicitly seeded.
+
+For example:
+
+createSampleData()
+
+or another clearly named development-only mechanism.
+
+Do not silently load them into every new workspace.
+
+==================================================
+13. TYPESCRIPT QUALITY
+==================================================
+
+After implementing the refactor:
+
+- Fix all TypeScript errors.
+- Fix all imports.
+- Remove unused imports.
+- Remove obsolete hard-coded category constants if no longer needed.
+- Keep types strongly typed.
+- Avoid using `any`.
+- Avoid unnecessary type assertions.
+- Avoid duplicating business logic.
+
+==================================================
+14. DO NOT TOUCH
+==================================================
+
+Unless required for compilation:
+
+Do NOT redesign:
+- TodayScreen
+- BrainDumpScreen
+- ReviewScreen
+- FocusModeScreen
+- BottomNav
+
+Do NOT change the visual language.
+
+Do NOT add:
+- authentication
+- database
+- Supabase
+- Firebase
+- Clerk
+- OAuth
+- payments
+- notifications
+- AI features
+- analytics
+- PWA functionality
+
+Those belong to later phases.
+
+==================================================
+15. ACCEPTANCE TEST
+==================================================
+
+Before declaring the task complete, verify the following manually or through tests:
+
+1. Existing application starts successfully.
+
+2. A fresh workspace contains:
+   - starter categories
+   - zero tasks
+   - zero projects
+   - zero daily plans
+   - zero focus sessions
+
+3. Brain Dump can create a task.
+
+4. Organize Task displays categories dynamically from application data.
+
+5. Organize Task displays projects dynamically from application data.
+
+6. A task can still be organized with:
+   - category
+   - priority
+   - project
+   - next action
+
+7. "Later" behavior still works.
+
+8. Today planning still works.
+
+9. Focus Mode still works.
+
+10. Focus sessions still persist.
+
+11. Daily plans still persist.
+
+12. Existing legacy localStorage data is not lost.
+
+13. Existing tasks referencing legacy project IDs still resolve correctly.
+
+14. Refreshing the browser does not reset data.
+
+15. Projects are no longer imported directly from mockData.ts by production components.
+
+16. Categories are no longer defined as a hard-coded list inside OrganizeSheet.tsx.
+
+17. No personal/example tasks automatically appear in a new workspace.
+
+18. No authentication/database work has been introduced.
+
+==================================================
+IMPORTANT FINAL INSTRUCTION
+==================================================
+
+Work incrementally.
+
+Before making changes, inspect the relevant files and understand their current relationships.
+
+Then implement the smallest coherent refactor.
+
+After implementation, run the project's available typecheck/build/test commands.
+
+If something fails because another file depends on the old category/project model, fix that dependency rather than reverting the architecture.
+
+At the end, give me a concise summary containing:
+
+- files changed
+- what changed architecturally
+- migration behavior
+- tests/typecheck/build result
+- any remaining issues
+
+Do not make unrelated improvements.
