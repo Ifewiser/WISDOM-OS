@@ -1,0 +1,253 @@
+## Phase 6C.5 — Live Supabase Auth + RLS Verification
+
+Phase 6C implementation is complete and the Wisdom OS Supabase client is now connected with:
+
+* `VITE_SUPABASE_URL`
+* `VITE_SUPABASE_PUBLISHABLE_KEY`
+
+Do NOT start Phase 6D.
+Do NOT migrate localStorage data.
+Do NOT modify the core application architecture.
+Do NOT redesign the UI.
+
+This phase is strictly for applying the existing Phase 6C database migration and performing a live authentication/bootstrap/RLS security verification against the real Supabase project.
+
+### 1. Apply the Phase 6C migration
+
+Apply:
+
+`lib/db/drizzle/0002_phase_6c_auth_rls.sql`
+
+to the connected Supabase Postgres database.
+
+Before applying it:
+
+* Verify the target database is the connected Supabase project.
+* Do not recreate or modify `auth.users`.
+* Do not reset/drop the existing database.
+* Do not modify previous migrations.
+* Preserve all Phase 6B schema and constraints.
+
+After applying, verify that the migration completed successfully.
+
+### 2. Verify database objects
+
+Confirm the live database contains:
+
+* profiles
+* workspaces
+* workspace_members
+* categories
+* projects
+* tasks
+* daily_plans
+* daily_plan_items
+* focus_sessions
+
+Verify:
+
+* RLS is enabled on all nine tables.
+* Phase 6B composite workspace foreign keys still exist.
+* `public.is_workspace_member(uuid)` exists.
+* `public.bootstrap_user_workspace(text,text)` exists.
+* The bootstrap function is executable by `authenticated`.
+* It is NOT executable by `anon` or `public`.
+* No service-role credential is exposed to browser code.
+
+Do not weaken any RLS policy merely to make a test pass.
+
+### 3. Live authentication test
+
+Create two temporary test users in the real Supabase project.
+
+Call them conceptually:
+
+* User A
+* User B
+
+Do not use any existing personal account unless necessary.
+
+For User A:
+
+1. Sign up with email/password.
+2. Confirm successful authentication.
+3. Verify session restoration.
+4. Run workspace bootstrap.
+5. Verify exactly one workspace is created.
+6. Verify exactly one owner membership exists.
+7. Verify exactly five starter categories exist:
+
+   * Money / MONEY
+   * Build / BUILD
+   * Learn / LEARN
+   * Admin / ADMIN
+   * Later / LATER
+8. Refresh the application.
+9. Verify bootstrap is idempotent and creates no duplicates.
+10. Sign out.
+11. Sign back in.
+12. Verify the same workspace is restored.
+
+Repeat equivalent tests for User B.
+
+### 4. Live workspace isolation test
+
+Create identifiable test data:
+
+User A:
+
+* Workspace A
+* Category A
+* Project A
+* Task A
+* Daily Plan A
+* Focus Session A
+
+User B:
+
+* Workspace B
+* Category B
+* Project B
+* Task B
+* Daily Plan B
+* Focus Session B
+
+Then test the actual Supabase client/database behavior.
+
+#### User A must NOT be able to:
+
+* SELECT Workspace B
+* SELECT User B's membership
+* SELECT Category B
+* SELECT Project B
+* SELECT Task B
+* SELECT User B's daily plan
+* SELECT User B's daily-plan items
+* SELECT User B's focus session
+
+Also attempt:
+
+* INSERT a task into Workspace B
+* UPDATE Task B
+* INSERT a project into Workspace B
+* UPDATE Project B
+* INSERT a category into Workspace B
+* UPDATE Category B
+* INSERT/update daily-plan data belonging to User B
+* INSERT/update a focus session belonging to User B
+
+All unauthorized operations must fail or return zero rows according to the policy behavior.
+
+Repeat the same isolation tests in the opposite direction for User B against User A.
+
+### 5. Membership escalation tests
+
+Explicitly test that a normal authenticated browser client cannot:
+
+* INSERT itself into an arbitrary workspace through `workspace_members`
+* Change its membership role to owner/admin
+* Modify another user's membership
+* Delete another user's membership
+* Change `workspaces.created_by`
+* Change `tasks.created_by`
+
+Test both users.
+
+### 6. Bootstrap RPC security tests
+
+Test the RPC from an authenticated client:
+
+* User A can bootstrap its own workspace.
+* User B can bootstrap its own workspace.
+* Repeated bootstrap calls are idempotent.
+* User A cannot cause a workspace to be created for User B.
+* The RPC cannot be called by an unauthenticated client.
+* The RPC cannot be used to create arbitrary workspace memberships.
+
+Also inspect the function definition and confirm the `SECURITY DEFINER` function has a locked `search_path` as intended.
+
+### 7. Cross-workspace foreign-key tests
+
+Attempt to create:
+
+* Task in Workspace A referencing Category B.
+* Task in Workspace A referencing Project B.
+* Daily-plan item in Workspace A referencing a plan/task from Workspace B.
+* Focus session in Workspace A referencing Task B.
+
+These must fail because of the workspace-safe composite foreign keys, even independently of RLS.
+
+### 8. Personal-data isolation
+
+Verify specifically that:
+
+* User A cannot read User B's daily plans.
+* User A cannot modify User B's daily plans.
+* User A cannot read User B's focus sessions.
+* User A cannot modify User B's focus sessions.
+
+Workspace membership alone must not grant access to another user's personal daily-plan/focus data.
+
+### 9. Verify browser security
+
+Inspect the built/browser-facing application and confirm:
+
+* Only `VITE_SUPABASE_URL` and the public publishable/anon key are present.
+* No service-role key exists in browser code.
+* No database password exists in browser code.
+* No privileged Supabase credential is embedded in the frontend bundle.
+* No credentials are printed into logs.
+
+### 10. Regression verification
+
+Confirm:
+
+* Wisdom OS still builds.
+* TypeScript checks pass.
+* `GET /api/healthz` still returns:
+  `{"status":"ok"}`
+* Existing localStorage data remains untouched.
+* No local-to-cloud migration has occurred.
+* No existing task/project/category UI behavior was intentionally changed.
+
+### 11. Cleanup
+
+After testing:
+
+* Delete the temporary test users and their test data if safe to do so.
+* Do NOT delete or modify any real user data.
+* Do NOT reset the Supabase project.
+
+### Required final report
+
+Return a concise verification report with:
+
+1. Migration applied: PASS/FAIL
+2. Auth signup/login/session restoration: PASS/FAIL
+3. Workspace bootstrap: PASS/FAIL
+4. Starter categories: PASS/FAIL
+5. User A → User B isolation: PASS/FAIL
+6. User B → User A isolation: PASS/FAIL
+7. Membership escalation protection: PASS/FAIL
+8. Bootstrap RPC security: PASS/FAIL
+9. Cross-workspace FK protection: PASS/FAIL
+10. Personal daily-plan isolation: PASS/FAIL
+11. Focus-session isolation: PASS/FAIL
+12. Browser credential safety: PASS/FAIL
+13. Typecheck/build: PASS/FAIL
+14. Express health check: PASS/FAIL
+15. localStorage preservation: PASS/FAIL
+
+For every FAIL or BLOCKED result, explain the exact reason.
+
+CRITICAL:
+
+Do not claim RLS "passes" based only on inspecting SQL policies.
+
+A live RLS test requires actual authenticated Supabase users and real database requests.
+
+If any live test cannot be executed, mark it BLOCKED and explain why.
+
+Do not fabricate successful security-test results.
+
+Stop after this phase. Do not begin Phase 6D.
