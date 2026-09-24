@@ -1,0 +1,189 @@
+## Phase 6C.5 Finalization — Migration Reproducibility + Live RLS Test Completion
+
+Do NOT start Phase 6D.
+
+We need to close the remaining Phase 6C.5 verification gaps before cloud data migration.
+
+There are two separate objectives:
+
+1. Verify the migration chain is reproducible from a completely empty database.
+2. Complete live authenticated authorization testing with two temporary users.
+
+### A. Migration reproducibility audit
+
+The live database was successfully constructed using the equivalent Phase 6B/6C statements in safe dependency order because the original Phase 6B migration attempted to create composite foreign keys before the required unique indexes.
+
+Do NOT alter the live production schema unless necessary.
+
+Inspect the migration chain and determine whether:
+
+* A fresh empty Supabase/Postgres database can execute the migrations in order.
+* The required unique indexes exist before composite foreign keys are created.
+* Migration `0000`, `0001`, and `0002` are internally consistent.
+* The migration metadata/journal is consistent.
+* The current migration chain would reproduce the live schema.
+
+If the original migration ordering is genuinely invalid, fix the migration files in the smallest safe way necessary so a fresh database can reproduce the live schema.
+
+Do NOT rewrite migration history unnecessarily.
+
+After any migration-file change, perform a clean validation against a disposable/isolated empty PostgreSQL database if the environment supports it.
+
+Do not modify the live Supabase database merely to test this.
+
+Report:
+
+* Migration chain reproducible: PASS/FAIL
+* Exact migration issue found, if any
+* Exact minimal correction made, if any
+* Fresh-database validation: PASS/FAIL/BLOCKED
+
+### B. Complete live authenticated testing
+
+The previous live tests were blocked because Supabase returned:
+
+`email rate limit exceeded`
+
+Do NOT repeatedly hammer the signup endpoint.
+
+Use the safest available method to obtain two temporary authenticated test users.
+
+Preferred options, in order:
+
+1. Use Supabase's project dashboard/authentication tooling to create two temporary test users.
+2. If appropriate administrative tooling is available, create temporary test users using a privileged server-side mechanism only. Never expose a service-role key, admin credential, database password, or privileged token to browser/client code.
+3. If neither is possible, leave the live tests BLOCKED and explain exactly what external action is required.
+
+Do NOT use or modify the user's real personal account.
+
+Use two temporary users:
+
+* User A
+* User B
+
+### C. Live authentication/bootstrap tests
+
+For both users verify:
+
+* signup or creation succeeds
+* authenticated session exists
+* workspace bootstrap succeeds
+* exactly one workspace exists
+* exactly one owner membership exists
+* exactly five starter categories exist
+* repeated bootstrap is idempotent
+* refresh/session restoration works
+
+Verify the five categories exactly:
+
+Money / MONEY
+Build / BUILD
+Learn / LEARN
+Admin / ADMIN
+Later / LATER
+
+### D. Live RLS isolation
+
+Create isolated test data for both users.
+
+Verify User A cannot:
+
+* SELECT User B's workspace
+* SELECT User B's membership
+* SELECT User B's categories
+* SELECT User B's projects
+* SELECT User B's tasks
+* SELECT User B's daily plans
+* SELECT User B's daily-plan items
+* SELECT User B's focus sessions
+
+Attempt unauthorized:
+
+* task INSERT into B's workspace
+* task UPDATE
+* project INSERT/UPDATE
+* category INSERT/UPDATE
+* daily-plan INSERT/UPDATE/DELETE
+* daily-plan-item INSERT/UPDATE/DELETE
+* focus-session INSERT/UPDATE
+
+Repeat symmetrically for User B against User A.
+
+Record the actual Supabase response behavior.
+
+Do not report "PASS" merely because a policy exists.
+
+### E. Membership and ownership escalation
+
+Attempt from each normal authenticated client:
+
+* INSERT into `workspace_members`
+* modify another user's membership
+* change own role
+* assign self to another workspace
+* modify `workspaces.created_by`
+* modify `tasks.created_by`
+
+All unauthorized actions must fail.
+
+### F. Cross-workspace FK tests
+
+Attempt:
+
+* Task A + Category B
+* Task A + Project B
+* Daily-plan-item A + Task B
+* Daily-plan-item A + Plan B
+* Focus-session A + Task B
+
+These must fail because of the composite workspace-safe foreign keys.
+
+### G. RPC tests
+
+Verify:
+
+* authenticated User A can call bootstrap for itself
+* authenticated User B can call bootstrap for itself
+* repeated calls do not create duplicates
+* unauthenticated invocation returns 401/permission denied
+* anonymous role cannot execute the RPC
+* arbitrary membership creation cannot be achieved through the RPC
+
+### H. Cleanup
+
+Delete all temporary users and their test data after verification.
+
+Confirm no test data remains.
+
+Do not touch real user data.
+
+### I. Required final report
+
+Return:
+
+1. Migration reproducibility
+2. Live database schema
+3. Auth test
+4. Bootstrap test
+5. Starter category test
+6. User A → B isolation
+7. User B → A isolation
+8. Membership escalation
+9. Ownership protection
+10. Cross-workspace FK protection
+11. Daily-plan privacy
+12. Focus-session privacy
+13. Bootstrap RPC security
+14. Browser credential safety
+15. Typecheck/build
+16. Express health
+17. localStorage preservation
+18. Test cleanup
+
+Each item must be PASS, FAIL, or BLOCKED.
+
+For every PASS involving authorization, state that it was verified against the live Supabase database, not merely inferred from SQL.
+
+For every BLOCKED item, state the exact missing prerequisite.
+
+Do not start Phase 6D.
