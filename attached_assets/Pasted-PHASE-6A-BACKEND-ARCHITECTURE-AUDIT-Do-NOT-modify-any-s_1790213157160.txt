@@ -1,0 +1,164 @@
+PHASE 6A: BACKEND ARCHITECTURE AUDIT
+
+Do NOT modify any source files.
+
+Do NOT install packages.
+
+Do NOT create a Supabase project.
+
+Do NOT change the UI.
+
+Do NOT implement authentication.
+
+Do NOT change localStorage.
+
+This is a planning and architecture task only.
+
+Inspect the current Wisdom OS codebase after Phase 5.5.
+
+We are preparing to migrate the application from local workspace persistence to:
+
+- Supabase Auth
+- Supabase PostgreSQL
+- Row Level Security
+
+Before implementation, analyze the CURRENT codebase and produce a concrete migration plan.
+
+Review:
+
+- src/types.ts
+- src/storage.ts
+- src/context/TaskContext.tsx
+- src/mockData.ts
+- ProjectsScreen
+- OrganizeSheet
+- DailyPlanningWizard
+- TodayScreen
+- FocusModeScreen
+- ReviewScreen
+- any workspace/category/project-related components
+- package.json
+- existing environment/configuration files
+
+Determine the exact current data model and relationships.
+
+Then propose:
+
+1. Supabase database schema
+
+Include tables, columns, primary keys, foreign keys, indexes and important constraints.
+
+2. User/workspace architecture
+
+Explain how:
+
+auth.users
+profiles
+workspaces
+workspace_members
+
+should relate.
+
+3. Workspace-owned entities
+
+Explain how these should relate:
+
+categories
+projects
+tasks
+daily_plans
+focus_sessions
+
+4. RLS strategy
+
+For every workspace-owned table, explain how access should be restricted so a user can only access workspaces they belong to.
+
+5. Local-to-cloud migration strategy
+
+Explain how the existing localStorage data should migrate into the authenticated user's first workspace without data loss or duplication.
+
+6. Daily plan modeling
+
+Specifically evaluate whether the current:
+
+bigRockTaskId
+supportTaskIds
+adminTaskIds
+
+structure should remain as arrays/columns in PostgreSQL or whether it should become a normalized relationship.
+
+Explain the tradeoff and recommend one.
+
+7. Category modeling
+
+Explain how the current data-driven category system and the special "Later" behavior should map into PostgreSQL.
+
+8. ID strategy
+
+Recommend whether to use UUIDs, generated IDs, or another strategy for:
+
+users
+workspaces
+categories
+projects
+tasks
+daily plans
+focus sessions
+
+9. Timestamps
+
+Recommend the appropriate database timestamp types and timezone handling.
+
+10. Indexes
+
+Identify the indexes that will actually matter for the current application.
+
+11. Migration safety
+
+Explain how to prevent:
+
+- duplicate records
+- duplicate categories
+- duplicate projects
+- repeated migration
+- orphaned tasks
+- broken project relationships
+- broken category relationships
+
+12. Authentication
+
+Recommend the minimum initial authentication implementation.
+
+Assume the first release should support email/password only.
+
+13. Future extensibility
+
+Explain how the proposed schema can later support:
+
+- multiple workspaces
+- workspace members
+- roles
+- sharing
+- collaboration
+
+without requiring a database rewrite.
+
+IMPORTANT:
+
+Do not implement anything.
+
+Do not make source-code changes.
+
+Do not create SQL migration files yet.
+
+Do not install dependencies.
+
+At the end, provide:
+
+A. Current architecture summary
+B. Proposed database schema
+C. Relationship diagram in text
+D. RLS strategy
+E. Migration strategy
+F. Recommended implementation order
+G. Risks or issues discovered in the current codebase
