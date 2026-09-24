@@ -1,0 +1,344 @@
+## Phase 6C.5 — Final Live Supabase RLS + Authorization Test
+
+The two temporary confirmed Supabase users have now been created manually.
+
+Their credentials are available ONLY through Replit Secrets:
+
+* `TEST_USER_A_EMAIL: wisdom.tasks@gmail.com`
+* `TEST_USER_A_PASSWORD: Hogfeb@2005`
+* `TEST_USER_B_EMAIL: wizimatic93@gmail.com`
+* `TEST_USER_B_PASSWORD: Hogfeb@2005`
+
+Do NOT ask me to paste the credentials into source code or chat.
+
+Do NOT print passwords, access tokens, refresh tokens, or other secrets in logs or in the final report.
+
+Do NOT start Phase 6D.
+
+This is the final live security verification for Phase 6C.5.
+
+---
+
+# 1. Test-user authentication
+
+Use the existing test accounts.
+
+Do NOT call `signUp()`.
+
+Authenticate them using Supabase email/password sign-in.
+
+For each user:
+
+* Sign in with `signInWithPassword`
+* Confirm authentication succeeds
+* Confirm a valid authenticated session exists
+* Record only non-sensitive identifiers needed for testing, such as user UUIDs
+* Do not expose access or refresh tokens
+
+If either login fails, mark the dependent tests BLOCKED and report the exact non-secret error.
+
+---
+
+# 2. User A workspace bootstrap
+
+Using User A's authenticated session:
+
+Call:
+
+`public.bootstrap_user_workspace(timezone, display_name)`
+
+Verify:
+
+* RPC succeeds
+* Workspace A is returned
+* User A owns the workspace
+* User A has exactly one membership for Workspace A
+* Membership role is owner
+* Exactly five starter categories exist
+* Categories are:
+
+  Money / MONEY
+  Build / BUILD
+  Learn / LEARN
+  Admin / ADMIN
+  Later / LATER
+
+Then call the bootstrap RPC again.
+
+Verify that:
+
+* No second workspace is created
+* No duplicate owner membership is created
+* No duplicate starter categories are created
+
+---
+
+# 3. User B workspace bootstrap
+
+Repeat the same process using User B.
+
+Verify:
+
+* Workspace B exists
+* User B owns Workspace B
+* User B has exactly one owner membership
+* Exactly five starter categories exist
+* Repeated bootstrap remains idempotent
+
+Do NOT assume Workspace A and Workspace B are different.
+
+Explicitly verify:
+
+`workspace_A.id != workspace_B.id`
+
+and:
+
+`user_A.id != user_B.id`
+
+---
+
+# 4. Create isolated test data
+
+Using User A's authenticated client, create:
+
+* Project A
+* Task A
+* Daily Plan A
+* Daily Plan Item A
+* Focus Session A
+
+Use only Workspace A.
+
+Using User B's authenticated client, create:
+
+* Project B
+* Task B
+* Daily Plan B
+* Daily Plan Item B
+* Focus Session B
+
+Use only Workspace B.
+
+Use clearly identifiable test names such as:
+
+* `RLS_TEST_PROJECT_A`
+* `RLS_TEST_TASK_A`
+* `RLS_TEST_PROJECT_B`
+* `RLS_TEST_TASK_B`
+
+Do not create any production-looking data.
+
+---
+
+# 5. User A → User B SELECT isolation
+
+Using User A's authenticated Supabase client, attempt to SELECT:
+
+* Workspace B
+* Workspace B membership
+* Category B
+* Project B
+* Task B
+* Daily Plan B
+* Daily Plan Item B
+* Focus Session B
+
+Expected result:
+
+User A must receive zero accessible rows or an authorization error according to the specific policy behavior.
+
+A query returning zero rows because of RLS counts as PASS.
+
+Do NOT count an application-side filter as security.
+
+The test must query Supabase directly.
+
+---
+
+# 6. User B → User A SELECT isolation
+
+Repeat the exact same test in reverse.
+
+User B must not be able to access:
+
+* Workspace A
+* Workspace A membership
+* Category A
+* Project A
+* Task A
+* Daily Plan A
+* Daily Plan Item A
+* Focus Session A
+
+Again, verify the actual Supabase response.
+
+---
+
+# 7. Unauthorized INSERT tests
+
+Using User A's authenticated client, attempt:
+
+### Workspace-owned data
+
+* INSERT Project into Workspace B
+* INSERT Category into Workspace B
+* INSERT Task into Workspace B
+
+The Task INSERT must also attempt to satisfy normal fields while using User A as `created_by`.
+
+Expected:
+
+FAIL due to RLS.
+
+Repeat from User B against Workspace A.
+
+Do not weaken policies to make these inserts possible.
+
+---
+
+# 8. Unauthorized UPDATE tests
+
+Using User A:
+
+Attempt to update:
+
+* Project B
+* Category B
+* Task B
+
+Repeat from User B against User A's records.
+
+Expected:
+
+Unauthorized updates must fail or affect zero rows.
+
+Verify the database state afterward to ensure the records were not modified.
+
+---
+
+# 9. Daily-plan privacy tests
+
+Using User A:
+
+Attempt to:
+
+* SELECT User B's daily plan
+* UPDATE User B's daily plan
+* DELETE User B's daily plan
+* INSERT a daily-plan item into User B's plan
+* UPDATE User B's daily-plan item
+* DELETE User B's daily-plan item
+
+Expected:
+
+All unauthorized operations must be denied or affect zero rows.
+
+Repeat in reverse for User B.
+
+This is particularly important because workspace membership does NOT mean one user should gain access to another user's personal planning data.
+
+---
+
+# 10. Focus-session privacy tests
+
+Using User A:
+
+Attempt to:
+
+* SELECT User B's focus session
+* INSERT a focus session using User B's `user_id`
+* UPDATE User B's focus session
+
+Expected:
+
+All unauthorized operations must fail or return zero accessible rows.
+
+Repeat in reverse for User B.
+
+---
+
+# 11. Membership escalation tests
+
+Using User A's authenticated client, attempt to:
+
+* INSERT a row into `workspace_members`
+* Add User A to Workspace B
+* Add another user to Workspace A
+* Change User A's role
+* Change User A's role to owner
+* Change another user's role
+* Delete another user's membership
+
+Repeat equivalent tests using User B.
+
+Expected:
+
+All unauthorized membership mutations must fail.
+
+The existing authenticated client must not be able to arbitrarily manipulate `workspace_members`.
+
+---
+
+# 12. Workspace ownership protection
+
+Using User A:
+
+Attempt to update:
+
+`workspaces.created_by`
+
+on Workspace A.
+
+Also attempt to change ownership to User B.
+
+Using User A:
+
+Attempt to update:
+
+`tasks.created_by`
+
+on Task A.
+
+Attempt to change it to User B.
+
+Expected:
+
+All ownership changes must fail.
+
+Verify the database values remain unchanged.
+
+Repeat equivalent tests where meaningful for User B.
+
+---
+
+# 13. Cross-workspace foreign-key tests
+
+Using User A's authenticated client, attempt:
+
+1. Create Task A using Category B.
+2. Create Task A using Project B.
+3. Create Daily Plan Item A using Task B.
+4. Create Daily Plan Item A using Daily Plan B.
+5. Create Focus Session A using Task B.
+
+These tests must be executed against the live database.
+
+Expected:
+
+All cross-workspace references must fail.
+
+This verifies the composite workspace-safe foreign keys independently of application-side checks.
+
+Repeat reverse-direction tests with User B where practical.
+
+---
+
+# 14. Bootstrap RPC security
+
+Test the RPC from:
+
+### Authenticated User A
+
+Must succeed for User A's own bootstrap.
+
+#
