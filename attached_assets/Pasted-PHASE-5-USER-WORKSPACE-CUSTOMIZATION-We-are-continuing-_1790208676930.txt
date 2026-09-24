@@ -1,0 +1,414 @@
+PHASE 5: USER WORKSPACE CUSTOMIZATION
+
+We are continuing from the completed Phase 4.5A data architecture refactor.
+
+IMPORTANT:
+This is another focused implementation phase.
+
+Do NOT redesign the application.
+Do NOT implement authentication.
+Do NOT add a database.
+Do NOT add Supabase, Firebase, Clerk, OAuth, or any cloud service.
+Do NOT rewrite working functionality.
+
+The goal of this phase is to make the current local workspace genuinely configurable by its user.
+
+==================================================
+1. PROJECT MANAGEMENT
+==================================================
+
+Projects are now real application data rather than mockData.
+
+Extend the existing project functionality so users can:
+
+- create a project
+- edit a project
+- archive a project
+
+Projects should retain:
+
+id
+name
+description
+status
+createdAt
+updatedAt
+
+Use:
+
+status: 'ACTIVE' | 'ARCHIVED'
+
+Archived projects should not appear as normal project choices when organizing a new task.
+
+Existing tasks assigned to an archived project must NOT be deleted or corrupted.
+
+The project can remain associated with those tasks.
+
+ProjectsScreen should support:
+
+- viewing active projects
+- viewing archived projects if appropriate
+- creating a project
+- editing a project
+- archiving a project
+
+Keep the existing visual design language.
+
+Do not turn ProjectsScreen into a complex project-management dashboard.
+
+==================================================
+2. CATEGORY MANAGEMENT
+==================================================
+
+Categories are now data-driven.
+
+Allow the user to:
+
+- create a category
+- rename a category
+- archive a category
+
+Use a simple model such as:
+
+id
+name
+status
+createdAt
+updatedAt
+
+where:
+
+status: 'ACTIVE' | 'ARCHIVED'
+
+The existing starter categories should initially be:
+
+Money
+Build
+Learn
+Admin
+Later
+
+These are starter data, not permanent hard-coded application categories.
+
+==================================================
+3. CATEGORY SAFETY
+==================================================
+
+Do NOT allow category changes to break existing tasks.
+
+If a category is archived:
+
+- existing tasks using it remain intact
+- archived category should no longer appear as an option for organizing new tasks
+
+If a category is renamed:
+
+- existing tasks should automatically display the new name because they reference the category ID
+
+Do not delete tasks when deleting/archiving categories.
+
+Prefer ARCHIVED over hard deletion.
+
+==================================================
+4. SPECIAL "LATER" BEHAVIOR
+==================================================
+
+The starter "Later" category currently has special behavior:
+
+- priority becomes NONE
+- nextAction is cleared
+
+Preserve this behavior.
+
+However, do not make the entire category architecture dependent on the literal string:
+
+'LATER'
+
+Use a stable property/identifier or another small mechanism so that this special starter category can be recognized safely.
+
+Do not build a complicated rules engine.
+
+==================================================
+5. CATEGORY MANAGEMENT UI
+==================================================
+
+There currently isn't a dedicated settings system.
+
+Do not create a giant settings application.
+
+Add a small, intuitive management area using the existing design system.
+
+A reasonable implementation could be:
+
+Projects screen
+    ↓
+Manage
+    ↓
+Projects / Categories
+
+or another similarly simple structure.
+
+The user should be able to understand where categories are managed without explanation.
+
+Use existing components/styles wherever possible.
+
+==================================================
+6. BASIC WORKSPACE SETTINGS
+==================================================
+
+Add a minimal workspace settings area.
+
+The user should be able to set a display/workspace name.
+
+For example:
+
+Wisdom's Workspace
+
+or:
+
+My Workspace
+
+Persist this locally.
+
+Do not implement accounts or authentication.
+
+Keep the data model simple enough that a future authenticated user can replace the local workspace identity.
+
+==================================================
+7. RESET WORKSPACE
+==================================================
+
+Provide a safe reset option.
+
+The user should be able to clear their local workspace data.
+
+IMPORTANT:
+
+Do not make this a one-click destructive action.
+
+Require a confirmation step.
+
+Clearly explain that resetting will remove local workspace data.
+
+The reset should clear:
+
+- tasks
+- projects
+- categories back to starter defaults
+- daily plans
+- focus sessions
+- active focus session
+- workspace settings
+
+Do not affect unrelated browser/localStorage data.
+
+After reset, the workspace should behave like a fresh workspace.
+
+==================================================
+8. BRAIN DUMP / ORGANIZE
+==================================================
+
+Verify that BrainDumpScreen and OrganizeSheet continue working with dynamic data.
+
+OrganizeSheet must:
+
+- display active categories from application state
+- display active projects from application state
+- not import mockData directly
+
+Creating a new category should make it available to OrganizeSheet without requiring a code change.
+
+Creating a new project should make it available to OrganizeSheet without requiring a code change.
+
+Archived categories/projects should not be selectable for new task organization.
+
+==================================================
+9. TODAY / DAILY PLANNING
+==================================================
+
+Do not change the planning engine unnecessarily.
+
+Verify that tasks using custom categories/projects still work with:
+
+- Today
+- Big Rock
+- Support Tasks
+- Admin tasks
+- task completion
+- daily plans
+
+The planning engine should operate on task IDs, not category names.
+
+==================================================
+10. REVIEW / FOCUS
+==================================================
+
+Do not redesign Review or Focus Mode.
+
+Verify that:
+
+- custom-category tasks can be focused
+- projects do not interfere with focus sessions
+- focus history remains intact
+- daily statistics remain intact
+
+==================================================
+11. STORAGE
+==================================================
+
+Keep localStorage centralized through the existing storage abstraction.
+
+Do not scatter localStorage calls through UI components.
+
+Ensure workspace settings, projects, and categories persist after refresh.
+
+Ensure archived state persists after refresh.
+
+Ensure reset removes only Wisdom OS workspace data.
+
+==================================================
+12. MOCK DATA
+==================================================
+
+Do not restore the old behavior where mockData automatically populates a new workspace.
+
+Sample/demo data must remain optional.
+
+A fresh workspace must contain:
+
+Starter categories:
+- Money
+- Build
+- Learn
+- Admin
+- Later
+
+Projects:
+none
+
+Tasks:
+none
+
+==================================================
+13. MIGRATION SAFETY
+==================================================
+
+Do not break the migration created in Phase 4.5A.
+
+Existing data must continue to work.
+
+Do not create duplicate categories or projects every time the application starts.
+
+Do not recreate archived records on every load.
+
+Migration and initialization must be idempotent.
+
+==================================================
+14. TYPESCRIPT / CODE QUALITY
+==================================================
+
+After implementation:
+
+- run typecheck
+- run build
+- run tests if available
+- fix TypeScript errors
+- remove unused imports
+- avoid any
+- avoid duplicated business logic
+- preserve existing architecture
+
+==================================================
+15. DO NOT TOUCH
+==================================================
+
+Unless required for compatibility:
+
+Do NOT redesign:
+
+TodayScreen
+BrainDumpScreen
+ReviewScreen
+FocusModeScreen
+BottomNav
+
+Do NOT introduce:
+
+authentication
+database
+cloud sync
+AI
+analytics
+payments
+notifications
+PWA
+collaboration
+
+Those belong to later phases.
+
+==================================================
+16. ACCEPTANCE TEST
+==================================================
+
+Verify:
+
+1. Fresh workspace loads with five starter categories and no personal tasks.
+
+2. User can create a project.
+
+3. Created project persists after refresh.
+
+4. User can edit a project.
+
+5. User can archive a project.
+
+6. Archived project cannot be assigned to a new task.
+
+7. Existing tasks assigned to an archived project remain intact.
+
+8. User can create a category.
+
+9. New category appears in Organize Task.
+
+10. User can rename a category.
+
+11. Existing tasks using that category show the new name.
+
+12. User can archive a category.
+
+13. Archived category cannot be assigned to new tasks.
+
+14. Existing tasks using archived categories remain intact.
+
+15. Later behavior still works.
+
+16. Workspace name persists after refresh.
+
+17. Reset workspace requires confirmation.
+
+18. Reset returns the workspace to starter categories with no tasks/projects/plans/sessions.
+
+19. Existing Phase 4.5A migration still works.
+
+20. Today, Brain Dump, Planning, Focus Mode and Review continue functioning.
+
+21. Typecheck/build succeed.
+
+22. No authentication or database was introduced.
+
+==================================================
+FINAL OUTPUT
+==================================================
+
+When complete, report concisely:
+
+- files changed
+- project-management changes
+- category-management changes
+- workspace settings changes
+- reset behavior
+- migration compatibility
+- typecheck/build/test results
+- any remaining issues
+
+Do not make unrelated improvements.
