@@ -1,0 +1,93 @@
+PHASE 5.5: INTERACTIVE SMOKE TEST ONLY
+
+Do NOT modify application code unless you discover a genuine bug that prevents the acceptance criteria below from working.
+
+Do NOT add features.
+Do NOT redesign anything.
+Do NOT refactor anything.
+
+Use the current running Wisdom OS preview and perform a complete interactive browser verification of the Phase 5 functionality.
+
+Test the following:
+
+1. Fresh workspace
+- Confirm starter categories exist.
+- Confirm there are no unintended personal/sample tasks.
+- Confirm there are no unintended sample projects.
+
+2. Project management
+- Create a project.
+- Give it a name and description.
+- Confirm it appears in Projects.
+- Refresh the browser.
+- Confirm it persists.
+- Edit the project.
+- Confirm the changes persist.
+- Archive the project.
+- Confirm it is no longer available for assigning to new tasks.
+
+3. Category management
+- Create a custom category.
+- Confirm it appears in Organize Task.
+- Create/organize a task using that category.
+- Rename the category.
+- Confirm the existing task reflects the renamed category.
+- Archive the category.
+- Confirm it is no longer available for new task organization.
+- Confirm the existing task remains intact.
+
+4. Later category
+- Confirm selecting the starter Later category still:
+  - sets priority to NONE
+  - clears nextAction
+
+5. Task/project relationship
+- Create a task.
+- Assign it to a project.
+- Archive that project.
+- Confirm the task still exists and retains its project relationship.
+
+6. Workspace settings
+- Change workspace name.
+- Refresh.
+- Confirm it persists.
+
+7. Workspace reset
+- Create enough test data that the workspace is clearly non-empty.
+- Trigger reset.
+- Confirm confirmation is required.
+- Confirm reset removes workspace data.
+- Confirm starter categories return.
+- Confirm unrelated browser storage is not affected if this can be verified.
+
+8. Core regression test
+Confirm the following still work:
+- Brain Dump
+- Organize Task
+- Today
+- Daily Planning
+- Big Rock
+- Support Tasks
+- task completion
+- Focus Mode
+- navigation
+
+9. Persistence
+Refresh the browser after important operations and confirm the state survives.
+
+IMPORTANT:
+If everything passes, make NO code changes.
+
+If a genuine bug is discovered:
+- fix only that bug
+- keep the fix minimal
+- rerun typecheck/build
+- verify the affected flow again
+
+Final response should contain only:
+
+PASS / FAIL for each major test area
+Any bugs discovered
+Files changed, if any
+Typecheck result
+Build result
