@@ -1,0 +1,1 @@
+- [Supabase live verification lessons](supabase-live-verification.md) — fresh migration ordering and explicit anon ACL revocation matter during live database setup.
